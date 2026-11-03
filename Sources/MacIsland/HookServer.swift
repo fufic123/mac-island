@@ -4,7 +4,8 @@ import os
 private let log = Logger(subsystem: "com.fufic123.macisland", category: "hooks")
 
 /// Listens on a Unix domain socket; each connection carries one newline-terminated JSON envelope.
-/// PermissionRequest connections stay open and are handed over as a `PermissionResponder`.
+/// Connections of hooks that wait for an answer (PermissionRequest, the background Stop hook)
+/// stay open and are handed over as a `HookReply`.
 final class HookServer: @unchecked Sendable {
     static var defaultSocketPath: String {
         FileManager.default.homeDirectoryForCurrentUser
@@ -12,7 +13,7 @@ final class HookServer: @unchecked Sendable {
     }
 
     private let path: String
-    private let onEvent: @Sendable (HookEnvelope, PermissionResponder?) -> Void
+    private let onEvent: @Sendable (HookEnvelope, HookReply?) -> Void
     private let queue = DispatchQueue(label: "com.fufic123.macisland.hookserver")
     private var listenFD: Int32 = -1
     private var acceptSource: DispatchSourceRead?
@@ -20,7 +21,7 @@ final class HookServer: @unchecked Sendable {
     /// Upper bound for one message; hook payloads are a few KB at most.
     private let maxMessageSize = 1 << 20
 
-    init(path: String = HookServer.defaultSocketPath, onEvent: @escaping @Sendable (HookEnvelope, PermissionResponder?) -> Void) {
+    init(path: String = HookServer.defaultSocketPath, onEvent: @escaping @Sendable (HookEnvelope, HookReply?) -> Void) {
         self.path = path
         self.onEvent = onEvent
     }
@@ -109,7 +110,11 @@ final class HookServer: @unchecked Sendable {
                 // permission_suggestions is free-form JSON that Codable can't keep; pass it through raw.
                 let raw = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
                 let suggestions = (raw?["payload"] as? [String: Any])?["permission_suggestions"] as? [Any]
-                onEvent(envelope, PermissionResponder(fd: client, suggestions: suggestions))
+                let responder = PermissionResponder(connection: HookConnection(fd: client), suggestions: suggestions)
+                onEvent(envelope, .permission(responder))
+            } else if envelope.awaitReply == true {
+                keepOpen = true
+                onEvent(envelope, .awaitReply(HookConnection(fd: client)))
             } else {
                 onEvent(envelope, nil)
             }

@@ -32,9 +32,13 @@ jq --arg cmd "$HOOK" --argjson events "$EVENTS" --argjson toolEvents "$TOOL_EVEN
   def entry($e):
     { hooks: [{ type: "command", command: $cmd, timeout: (if $e == "PermissionRequest" then 86400 else 5 end) }] }
     + (if ($toolEvents | index($e)) then { matcher: "*" } else {} end);
+  # Background Stop hook that waits for a reply typed in the island and wakes Claude with it.
+  def awaitEntry:
+    { hooks: [{ type: "command", command: ($cmd + " --await-reply"), async: true, asyncRewake: true }] };
   .hooks = (.hooks // {})
   | reduce $events[] as $e (.;
-      .hooks[$e] = (((.hooks[$e] // []) | strip) + (if $install then [entry($e)] else [] end)))
+      .hooks[$e] = (((.hooks[$e] // []) | strip)
+        + (if $install then [entry($e)] + (if $e == "Stop" then [awaitEntry] else [] end) else [] end)))
   | .hooks |= with_entries(select(.value | length > 0))
   | if (.hooks | length) == 0 then del(.hooks) else . end
 ' "$SETTINGS" > "$tmp"

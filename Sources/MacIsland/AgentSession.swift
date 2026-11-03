@@ -50,6 +50,10 @@ struct AgentSession: Identifiable, Sendable {
     var activity: String?
     /// Question text while `status == .question`.
     var question: String?
+    /// Claude's final text of the last turn.
+    var lastMessage: String?
+    /// The background Stop hook is waiting, so a reply typed in the island reaches Claude.
+    var canReply = false
 
     /// Pending permission, while `status == .needsPermission`.
     var permissionTool: String?
@@ -72,6 +76,9 @@ struct AgentSession: Identifiable, Sendable {
     var turnStartedAt: Date?
     var finishedAt: Date?
     var lastTurnDuration: TimeInterval?
+
+    /// Clicking the row opens it in the island rather than jumping to the terminal.
+    var opensDetail: Bool { canReply || lastMessage != nil }
 
     var projectName: String {
         cwd.map { ($0 as NSString).lastPathComponent } ?? "Unknown"
@@ -139,6 +146,17 @@ enum ToolDescriber {
         case "WebFetch": "Fetch a page from \(project)?"
         default: "Use \(tool.map(shortName) ?? "a tool") in \(project)?"
         }
+    }
+
+    /// First meaningful line of a Markdown message, without the markup, for one-line previews.
+    static func summary(_ text: String?) -> String? {
+        guard let line = text?.split(separator: "\n").lazy
+            .map({ $0.trimmingCharacters(in: .whitespaces) })
+            .first(where: { !$0.isEmpty && !$0.hasPrefix("```") })
+        else { return nil }
+        var s = line.replacingOccurrences(of: "**", with: "").replacingOccurrences(of: "`", with: "")
+        while let first = s.first, "#-*> ".contains(first) { s.removeFirst() }
+        return s.isEmpty ? nil : s
     }
 
     /// mcp__server__tool -> tool

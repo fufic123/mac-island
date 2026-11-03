@@ -4,6 +4,7 @@ struct IslandView: View {
     let model: IslandModel
     let onFocus: (AgentSession) -> Void
     let onDecide: (_ sessionId: String, _ requestId: UUID, _ decision: PermissionDecision) -> Void
+    let onReply: (_ sessionId: String, _ text: String) -> Void
 
     var body: some View {
         let size = model.currentSize
@@ -61,7 +62,7 @@ struct IslandView: View {
                     .transition(Self.fade)
             }
         case .panel:
-            PanelContent(model: model, onFocus: onFocus, onDecide: onDecide)
+            PanelContent(model: model, onFocus: onFocus, onDecide: onDecide, onReply: onReply)
                 .transition(Self.fade)
         }
     }
@@ -132,13 +133,23 @@ private struct PeekContent: View {
                     .foregroundStyle(labelColor)
             }
             .frame(height: headerHeight)
-            HStack(spacing: 12) {
+            if peek.isTall {
+                // Claude's closing line, up to two lines, like the design's "Update".
                 message
                     .font(.system(size: 15))
-                    .lineLimit(1)
-                Spacer(minLength: 0)
+                    .lineSpacing(2)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 6)
+            } else {
+                HStack(spacing: 12) {
+                    message
+                        .font(.system(size: 15))
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .frame(height: IslandModel.peekRowHeight)
             }
-            .frame(height: IslandModel.peekRowHeight)
         }
         .padding(.horizontal, 20)
     }
@@ -150,6 +161,7 @@ private struct PeekContent: View {
         case .question: Glyph(symbol: "questionmark.bubble", color: Crystal.amber)
         case .done: Glyph(symbol: "checkmark", color: Crystal.amethyst, weight: .bold)
         case .allowed, .ruleAdded: Glyph(symbol: "checkmark", color: Crystal.emerald, weight: .bold)
+        case .replied: Glyph(symbol: "arrow.up", color: Crystal.emerald, weight: .bold)
         case .denied: Glyph(symbol: "xmark", color: Crystal.secondary, size: 14, weight: .bold)
         }
     }
@@ -158,7 +170,8 @@ private struct PeekContent: View {
         switch peek.kind {
         case .permission: "Permission"
         case .question: "Question"
-        case .done: "Done"
+        case let .done(_, _, duration, _): duration.map { "Done · \(Clock.format($0))" } ?? "Done"
+        case .replied: "Sent"
         case .allowed: "Allowed"
         case .denied: "Denied"
         case .ruleAdded: "Rule added"
@@ -169,7 +182,7 @@ private struct PeekContent: View {
         switch peek.kind {
         case .permission, .question: Crystal.amberText
         case .done: Crystal.amethystText
-        case .allowed, .ruleAdded: Crystal.emerald
+        case .allowed, .ruleAdded, .replied: Crystal.emerald
         case .denied: Crystal.secondary
         }
     }
@@ -180,8 +193,15 @@ private struct PeekContent: View {
             Self.news(project, phrase)
         case let .question(project):
             Self.news(project, "asks a question")
-        case let .done(project, duration):
-            Self.news(project, duration.map { "finished in \(Clock.format($0))" } ?? "finished")
+        case let .done(_, project, duration, summary):
+            if let summary {
+                Text(project).fontWeight(.semibold) + Text(" \(summary)").foregroundStyle(Crystal.body)
+            } else {
+                Self.news(project, duration.map { "finished in \(Clock.format($0))" } ?? "finished")
+            }
+        case let .replied(project, text):
+            Text(ToolDescriber.firstLine(text, limit: 40) ?? text).fontWeight(.semibold)
+                + Text(" sent to \(project)").foregroundStyle(Crystal.secondary)
         case let .allowed(project, detail):
             Self.news(project, detail)
         case .denied:
@@ -203,9 +223,11 @@ private struct PanelContent: View {
     let model: IslandModel
     let onFocus: (AgentSession) -> Void
     let onDecide: (_ sessionId: String, _ requestId: UUID, _ decision: PermissionDecision) -> Void
+    let onReply: (_ sessionId: String, _ text: String) -> Void
 
     var body: some View {
         let pending = model.store.pendingDecisions
+        let selected = model.selectedSessionId.flatMap { model.store.sessions[$0] }
         // Refresh timers once a second.
         TimelineView(.periodic(from: .now, by: 1)) { context in
             if let request = pending.first, let requestId = request.permissionRequestId {
@@ -215,6 +237,14 @@ private struct PanelContent: View {
                     now: context.date,
                     headerHeight: model.notchHeight,
                     onDecide: { onDecide(request.id, requestId, $0) }
+                )
+            } else if let selected {
+                DetailPanel(
+                    model: model,
+                    session: selected,
+                    now: context.date,
+                    onFocus: { onFocus(selected) },
+                    onReply: { onReply(selected.id, $0) }
                 )
             } else {
                 SessionsPanel(model: model, now: context.date, onFocus: onFocus)
@@ -298,7 +328,14 @@ private struct SessionsPanel: View {
             height: height,
             radius: radius,
             isHovered: model.hoveredSessionId == session.id,
-            onFocus: { onFocus(session) }
+            onFocus: {
+                // Sessions with something to read or answer open in detail; the rest jump to the terminal.
+                if session.opensDetail {
+                    model.selectedSessionId = session.id
+                } else {
+                    onFocus(session)
+                }
+            }
         )
     }
 
@@ -337,14 +374,15 @@ private struct SessionRow: View {
                     .tracking(-0.15)
                 Text(action)
                     .font(.system(size: 13))
-                    .foregroundStyle(session.status.needsAttention ? Crystal.amberText : Crystal.secondary)
+                    .foregroundStyle(actionColor)
                     .truncationMode(.tail)
             }
             .lineLimit(1)
             Spacer(minLength: 8)
             if isHovered {
                 HStack(spacing: 6) {
-                    Text("Open terminal").font(.system(size: 13))
+                    Text(session.canReply ? "Reply" : session.opensDetail ? "Details" : "Open terminal")
+                        .font(.system(size: 13))
                     Text("↩")
                         .font(.system(size: 12))
                         .foregroundStyle(Crystal.secondary)
@@ -378,9 +416,19 @@ private struct SessionRow: View {
         case .needsPermission: session.pendingPermission ?? "Needs permission"
         case .question: session.question.map { "Asks: \($0)" } ?? "Asks a question"
         case .working: session.activity ?? "Thinking…"
-        case .done: "Finished \(Clock.ago(now.timeIntervalSince(session.finishedAt ?? session.lastEventAt)))"
-        case .waitingForInput, .idle: "Waiting for your next prompt"
+        case .done, .waitingForInput, .idle:
+            // Claude's closing line stays in the row until the next action.
+            ToolDescriber.summary(session.lastMessage)
+                ?? (session.status == .done
+                    ? "Finished \(Clock.ago(now.timeIntervalSince(session.finishedAt ?? session.lastEventAt)))"
+                    : "Waiting for your next prompt")
         }
+    }
+
+    private var actionColor: Color {
+        if session.status.needsAttention { return Crystal.amberText }
+        if session.status == .done && session.lastMessage != nil { return Crystal.amethystText }
+        return Crystal.secondary
     }
 
     /// Waiting time for blocked sessions, turn time while running, last turn once done.
@@ -490,6 +538,144 @@ private struct PermissionPanel: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
             }
+        }
+    }
+}
+
+/// One session up close: Claude's last message in full and a field to answer it from the island.
+private struct DetailPanel: View {
+    let model: IslandModel
+    let session: AgentSession
+    let now: Date
+    let onFocus: () -> Void
+    let onReply: (String) -> Void
+
+    // Draft lives in the model: @State is a macro whose plugin the Command Line Tools lack.
+    @FocusState private var fieldFocused: Bool
+
+    private var draft: Binding<String> {
+        Binding(get: { model.replyDraft }, set: { model.replyDraft = $0 })
+    }
+
+    private var canSend: Bool { !model.replyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Button { model.selectedSessionId = nil } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Crystal.secondary)
+                        StatusGlyph(status: session.status, size: 15)
+                        Text(label)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(labelColor)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                Spacer()
+                Text(time)
+                    .font(.system(size: 13).monospacedDigit())
+                    .foregroundStyle(Crystal.secondary)
+            }
+            .frame(height: model.notchHeight)
+            .padding(.horizontal, 20)
+
+            MeasuredScroll {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(session.projectName)
+                        .font(.system(size: 20, weight: .semibold))
+                        .tracking(-0.4)
+                        .padding(.top, 16)
+                        .padding(.bottom, 8)
+
+                    Text(message)
+                        .font(.system(size: 14))
+                        .lineSpacing(3)
+                        .foregroundStyle(Crystal.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+
+                    if session.canReply {
+                        TextField("Reply to Claude…", text: draft, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 14))
+                            .lineLimit(1...5)
+                            .focused($fieldFocused)
+                            .onSubmit(send)
+                            .onExitCommand {
+                                fieldFocused = false
+                                model.selectedSessionId = nil
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 11)
+                            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Crystal.codeBackground))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .strokeBorder(fieldFocused ? Crystal.amethyst.opacity(0.55) : .clear, lineWidth: 1.5)
+                            )
+                            .padding(.top, 16)
+                    }
+
+                    HStack(spacing: 10) {
+                        CapsuleButton(title: "Open terminal", background: Crystal.button, foreground: Crystal.text, action: onFocus)
+                        if session.canReply {
+                            CapsuleButton(title: "Send", background: Crystal.amethyst, foreground: Color(hex: 0x170B33), action: send)
+                                .opacity(canSend ? 1 : 0.45)
+                                .disabled(!canSend)
+                        }
+                    }
+                    .padding(.top, 16)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
+        }
+        .onChange(of: fieldFocused) { _, focused in model.isComposing = focused }
+        .onDisappear { model.isComposing = false }
+    }
+
+    private func send() {
+        guard canSend else { return }
+        let text = model.replyDraft
+        model.replyDraft = ""
+        fieldFocused = false
+        onReply(text)
+    }
+
+    /// Light Markdown (bold, code, links) as Claude wrote it.
+    private var message: AttributedString {
+        let text = session.lastMessage ?? "No message from Claude yet."
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+    }
+
+    private var label: String {
+        switch session.status {
+        case .done: "Done"
+        case .working: "Running"
+        case .needsPermission: "Permission"
+        case .question: "Question"
+        case .waitingForInput, .idle: "Idle"
+        }
+    }
+
+    private var labelColor: Color {
+        switch session.status {
+        case .done: Crystal.amethystText
+        case .working: Crystal.emerald
+        case .needsPermission, .question: Crystal.amberText
+        case .waitingForInput, .idle: Crystal.secondary
+        }
+    }
+
+    private var time: String {
+        switch session.status {
+        case .done: Clock.format(session.lastTurnDuration ?? 0)
+        case .working: Clock.format(now.timeIntervalSince(session.turnStartedAt ?? session.startedAt))
+        default: Clock.format(now.timeIntervalSince(session.startedAt))
         }
     }
 }

@@ -8,6 +8,8 @@ struct HookEnvelope: Decodable, Sendable {
     let claudePid: Int32?
     /// Resolved by the hook, so the app never reads project folders (TCC-protected).
     let gitBranch: String?
+    /// Sent by the background Stop hook, which then waits for a typed reply.
+    let awaitReply: Bool?
     let payload: ClaudeHookPayload
 }
 
@@ -25,6 +27,8 @@ struct ClaudeHookPayload: Decodable, Sendable {
     let notificationType: String?
     /// UserPromptSubmit.
     let prompt: String?
+    /// Stop: Claude's final text of the turn.
+    let lastAssistantMessage: String?
 }
 
 /// The handful of tool arguments used to describe what a tool call is doing.

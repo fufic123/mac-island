@@ -4,27 +4,20 @@ enum PermissionDecision: Sendable {
     case allow, deny, alwaysAllow
 }
 
-/// The open socket of a PermissionRequest hook that is waiting for Allow/Deny.
-/// Whatever is written becomes the hook's stdout; closing without writing means "no decision".
+/// A PermissionRequest hook waiting for Allow/Deny; closing without an answer means
+/// "no decision", so Claude's own prompt handles it.
 final class PermissionResponder: @unchecked Sendable {
-    private let fd: Int32
-    private let lock = NSLock()
-    private var isClosed = false
+    private let connection: HookConnection
     /// Claude's `permission_suggestions`, sent back as `updatedPermissions` for "Always allow".
     private let suggestions: [Any]?
     /// Button label for the first suggestion, nil when there is none we can describe.
     let alwaysAllowLabel: String?
 
-    init(fd: Int32, suggestions: [Any]? = nil) {
-        self.fd = fd
+    init(connection: HookConnection, suggestions: [Any]? = nil) {
+        self.connection = connection
         self.suggestions = suggestions
         self.alwaysAllowLabel = suggestions.flatMap(Self.label(for:))
-        var on: Int32 = 1
-        // The hook may already be gone (answered in the terminal); don't die on SIGPIPE.
-        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
     }
-
-    deinit { close() }
 
     /// The rule "Always allow" adds, for the confirmation peek.
     var alwaysAllowRule: String? {
@@ -48,13 +41,8 @@ final class PermissionResponder: @unchecked Sendable {
         }
     }
 
-    /// Releases the hook without a decision, so Claude's own prompt handles it.
     func close() {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !isClosed else { return }
-        isClosed = true
-        Darwin.close(fd)
+        connection.close()
     }
 
     private func reply(_ decision: [String: Any]) {
@@ -66,20 +54,7 @@ final class PermissionResponder: @unchecked Sendable {
         ]
         guard var data = try? JSONSerialization.data(withJSONObject: output) else { return close() }
         data.append(UInt8(ascii: "\n"))
-
-        lock.lock()
-        if !isClosed {
-            data.withUnsafeBytes { buf in
-                var offset = 0
-                while offset < buf.count {
-                    let n = write(fd, buf.baseAddress! + offset, buf.count - offset)
-                    if n <= 0 { break }
-                    offset += n
-                }
-            }
-        }
-        lock.unlock()
-        close()
+        connection.send(data)
     }
 
     private static func label(for suggestions: [Any]) -> String? {

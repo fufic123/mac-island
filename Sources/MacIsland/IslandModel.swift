@@ -7,7 +7,8 @@ struct Peek: Equatable {
     enum Kind: Equatable {
         case permission(project: String, phrase: String)
         case question(project: String)
-        case done(project: String, duration: TimeInterval?)
+        case done(sessionId: String, project: String, duration: TimeInterval?, summary: String?)
+        case replied(project: String, text: String)
         case allowed(project: String, detail: String)
         case denied
         case ruleAdded(rule: String, project: String)
@@ -20,7 +21,9 @@ struct Peek: Equatable {
         switch signal {
         case let .permission(project, phrase): kind = .permission(project: project, phrase: phrase)
         case let .question(project): kind = .question(project: project)
-        case let .done(project, duration): kind = .done(project: project, duration: duration)
+        case let .done(sessionId, project, duration, summary):
+            kind = .done(sessionId: sessionId, project: project, duration: duration, summary: summary)
+        case let .replied(project, text): kind = .replied(project: project, text: text)
         case let .allowed(project, detail): kind = .allowed(project: project, detail: detail)
         case .denied: kind = .denied
         case let .ruleAdded(rule, project): kind = .ruleAdded(rule: rule, project: project)
@@ -32,7 +35,7 @@ struct Peek: Equatable {
         switch kind {
         case .permission, .question, .done: 6
         case .allowed, .denied: 1.2
-        case .ruleAdded: 5
+        case .ruleAdded, .replied: 5
         }
     }
 
@@ -40,9 +43,21 @@ struct Peek: Equatable {
         switch kind {
         case .permission, .question: .amber
         case .done: .amethyst
-        case .allowed, .ruleAdded: .emerald
+        case .allowed, .ruleAdded, .replied: .emerald
         case .denied: .obsidian
         }
+    }
+
+    /// A finished turn shows Claude's closing line, which takes up to two lines.
+    var isTall: Bool {
+        if case .done(_, _, _, let summary?) = kind { return !summary.isEmpty }
+        return false
+    }
+
+    /// Session a hover should open in detail.
+    var sessionId: String? {
+        if case let .done(sessionId, _, _, _) = kind { return sessionId }
+        return nil
     }
 }
 
@@ -61,6 +76,14 @@ final class IslandModel {
     var hoveredSessionId: String?
     /// Natural height of the open panel's scrollable body.
     var panelBodyHeight: CGFloat = 0
+    /// Session opened in detail (last message and reply), nil for the list.
+    var selectedSessionId: String? {
+        didSet { if oldValue != selectedSessionId { replyDraft = "" } }
+    }
+    /// The reply field has keyboard focus; the island stays open while typing.
+    var isComposing = false
+    /// Text being typed in the reply field. Cleared when a different session is opened.
+    var replyDraft = ""
 
     init(store: SessionStore) {
         self.store = store
@@ -73,6 +96,7 @@ final class IslandModel {
     static let compactRadius: CGFloat = 14
     static let peekWidth: CGFloat = 400
     static let peekRowHeight: CGFloat = 38
+    static let tallPeekBodyHeight: CGFloat = 60
     static let peekRadius: CGFloat = 26
     static let panelWidth: CGFloat = 440
     static let panelMaxHeight: CGFloat = 620
@@ -95,7 +119,8 @@ final class IslandModel {
     }
 
     var peekSize: CGSize {
-        CGSize(width: Self.peekWidth, height: notchHeight + Self.peekRowHeight + 4)
+        let body = peek?.isTall == true ? Self.tallPeekBodyHeight : Self.peekRowHeight + 4
+        return CGSize(width: Self.peekWidth, height: notchHeight + body)
     }
 
     var panelSize: CGSize {

@@ -8,7 +8,8 @@ private let log = Logger(subsystem: "com.fufic123.macisland", category: "session
 enum IslandSignal: Sendable {
     case permission(project: String, phrase: String)
     case question(project: String)
-    case done(project: String, duration: TimeInterval?)
+    case done(sessionId: String, project: String, duration: TimeInterval?, summary: String?)
+    case replied(project: String, text: String)
     case allowed(project: String, detail: String)
     case denied
     case ruleAdded(rule: String, project: String)
@@ -21,6 +22,8 @@ final class SessionStore {
     private(set) var sessions: [String: AgentSession] = [:]
     /// Hooks blocked on a PermissionRequest, waiting for Allow/Deny from the island.
     private var responders: [String: PermissionResponder] = [:]
+    /// Background Stop hooks waiting for a typed reply, one per session.
+    private var replyWaiters: [String: HookConnection] = [:]
     @ObservationIgnored var onSignal: ((IslandSignal) -> Void)?
     /// When the last decision was made; the next queued request slides into the same spot.
     @ObservationIgnored private var lastDecisionAt: Date = .distantPast
@@ -48,8 +51,18 @@ final class SessionStore {
             .sorted { ($0.permissionRequestedAt ?? .distantPast) < ($1.permissionRequestedAt ?? .distantPast) }
     }
 
-    func apply(_ envelope: HookEnvelope, responder: PermissionResponder? = nil, at now: Date = .now) {
+    func apply(_ envelope: HookEnvelope, reply: HookReply? = nil, at now: Date = .now) {
         let p = envelope.payload
+        if envelope.awaitReply == true {
+            if case let .awaitReply(connection) = reply { registerReplyWaiter(connection, for: envelope) }
+            return
+        }
+        var responder: PermissionResponder?
+        if case let .permission(r) = reply { responder = r }
+        // A new turn (typed in the terminal) or the end of the session makes a pending reply moot.
+        if ["UserPromptSubmit", "PreToolUse", "SessionEnd"].contains(p.hookEventName) {
+            releaseReplyWaiter(for: p.sessionId)
+        }
         // Any later event means the request was settled elsewhere (e.g. in the terminal),
         // so release the waiting hook. Notifications don't settle anything.
         if p.hookEventName != "Notification" {
@@ -122,7 +135,11 @@ final class SessionStore {
             s.finishedAt = now
             s.lastTurnDuration = s.turnStartedAt.map { now.timeIntervalSince($0) }
             s.turnStartedAt = nil
-            if wasWorking { onSignal?(.done(project: s.projectName, duration: s.lastTurnDuration)) }
+            if let message = p.lastAssistantMessage, !message.isEmpty { s.lastMessage = message }
+            if wasWorking {
+                onSignal?(.done(sessionId: s.id, project: s.projectName, duration: s.lastTurnDuration,
+                                summary: ToolDescriber.summary(s.lastMessage)))
+            }
         default:
             break
         }
@@ -174,6 +191,40 @@ final class SessionStore {
         sessions[sessionId] = s
     }
 
+    /// Sends a reply typed in the island to Claude via the waiting background Stop hook.
+    func reply(sessionId: String, text: String, now: Date = .now) {
+        let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty, let waiter = replyWaiters.removeValue(forKey: sessionId),
+              var s = sessions[sessionId]
+        else { return }
+        waiter.send(Data(text.utf8))
+        s.canReply = false
+        s.status = .working
+        s.activity = "Thinking…"
+        s.turnStartedAt = now
+        s.finishedAt = nil
+        sessions[sessionId] = s
+        onSignal?(.replied(project: s.projectName, text: text))
+    }
+
+    private func registerReplyWaiter(_ connection: HookConnection, for envelope: HookEnvelope) {
+        let id = envelope.payload.sessionId
+        replyWaiters.removeValue(forKey: id)?.close()
+        replyWaiters[id] = connection
+        // The background hook can arrive before the regular Stop event.
+        var s = sessions[id] ?? AgentSession(id: id, startedAt: .now, lastEventAt: .now)
+        if let cwd = envelope.payload.cwd { s.cwd = cwd }
+        if let message = envelope.payload.lastAssistantMessage, !message.isEmpty { s.lastMessage = message }
+        if let pid = envelope.claudePid { s.pid = pid }
+        s.canReply = true
+        sessions[id] = s
+    }
+
+    private func releaseReplyWaiter(for sessionId: String) {
+        replyWaiters.removeValue(forKey: sessionId)?.close()
+        sessions[sessionId]?.canReply = false
+    }
+
     private func clearPermission(_ s: inout AgentSession) {
         s.permissionTool = nil
         s.pendingPermission = nil
@@ -202,6 +253,7 @@ final class SessionStore {
             }
             if dead {
                 releaseResponder(for: id)
+                releaseReplyWaiter(for: id)
                 sessions[id] = nil
             }
         }

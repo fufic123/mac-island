@@ -16,6 +16,7 @@ final class IslandController {
     private var peekWork: DispatchWorkItem?
     private var hookServer: HookServer?
     private var hoverTracker: HoverTracker?
+    private var stickySpace: StickySpace?
 
     /// Extra slack around the collapsed island so it's easy to hit with the cursor.
     private let hoverSlop: CGFloat = 8
@@ -33,7 +34,8 @@ final class IslandController {
         let hosting = IslandHostingView(rootView: IslandView(
             model: model,
             onFocus: { TerminalFocuser.focus($0) },
-            onDecide: { store.decide(sessionId: $0, requestId: $1, decision: $2) }
+            onDecide: { store.decide(sessionId: $0, requestId: $1, decision: $2) },
+            onReply: { [weak self] in self?.sendReply(sessionId: $0, text: $1) }
         ))
         hosting.sizingOptions = []
         panel.contentView = hosting
@@ -44,6 +46,21 @@ final class IslandController {
 
         layout()
         panel.orderFrontRegardless()
+        let space = StickySpace()
+        space.add(panel)
+        stickySpace = space
+
+        // Clicking elsewhere takes keyboard focus from the reply field; let the island close again.
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didResignKeyNotification,
+            object: panel,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.model.isComposing = false
+                self?.updateHover()
+            }
+        }
 
         NotificationCenter.default.addObserver(
             forName: NSApplication.didChangeScreenParametersNotification,
@@ -58,8 +75,8 @@ final class IslandController {
 
     private func startHookServer() {
         let store = store
-        let server = HookServer { envelope, responder in
-            Task { @MainActor in store.apply(envelope, responder: responder) }
+        let server = HookServer { envelope, reply in
+            Task { @MainActor in store.apply(envelope, reply: reply) }
         }
         pruneTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { _ in
             MainActor.assumeIsolated { store.prune() }
@@ -88,6 +105,20 @@ final class IslandController {
             height: size.height
         )
         panel.setFrame(frame, display: true)
+    }
+
+    // MARK: Reply
+
+    private func sendReply(sessionId: String, text: String) {
+        store.reply(sessionId: sessionId, text: text)
+        model.selectedSessionId = nil
+        model.isComposing = false
+        // Hand the keyboard back to whatever app was in front: a window that orders out loses key.
+        if let panel, panel.isKeyWindow {
+            panel.orderOut(nil)
+            panel.orderFrontRegardless()
+            stickySpace?.add(panel)
+        }
     }
 
     // MARK: Peek
@@ -158,6 +189,8 @@ final class IslandController {
                     // Still there after the dwell?
                     guard let rect = self.hoverRect(), rect.contains(NSEvent.mouseLocation) else { return }
                     self.peekWork?.cancel()
+                    // Hovering a "Done" peek opens that session's last message and reply.
+                    self.model.selectedSessionId = self.model.peek?.sessionId
                     self.model.peek = nil
                     self.model.isExpanded = true
                 }
@@ -167,11 +200,15 @@ final class IslandController {
         } else {
             expandWork?.cancel()
             expandWork = nil
-            guard model.isExpanded, collapseWork == nil else { return }
+            // Stay open while typing a reply, even if the cursor wanders off.
+            guard model.isExpanded, !model.isComposing, collapseWork == nil else { return }
             let work = DispatchWorkItem { [weak self] in
                 MainActor.assumeIsolated {
-                    self?.model.isExpanded = false
-                    self?.collapseWork = nil
+                    guard let self else { return }
+                    self.collapseWork = nil
+                    guard !self.model.isComposing else { return }
+                    self.model.isExpanded = false
+                    self.model.selectedSessionId = nil
                 }
             }
             collapseWork = work
