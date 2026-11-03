@@ -31,9 +31,21 @@ struct IslandView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Mac Island")
                 .font(.system(size: 13, weight: .semibold))
-            Text("No agent sessions yet")
-                .font(.system(size: 12))
-                .foregroundStyle(.secondary)
+            if let event = model.lastEvent {
+                let p = event.payload
+                Text("\(p.hookEventName)\(p.toolName.map { " · \($0)" } ?? "")")
+                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                Text("\((p.cwd as NSString?)?.lastPathComponent ?? "?") · \(p.sessionId.prefix(8)) · \(event.termProgram ?? "") \(event.tty ?? "")")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                Text("\(model.eventCount) events received")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("No agent sessions yet")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
         }
         .foregroundStyle(.white)
         .frame(maxWidth: .infinity, alignment: .leading)

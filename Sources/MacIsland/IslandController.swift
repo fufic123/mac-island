@@ -9,6 +9,7 @@ final class IslandController {
     private var geometry: NotchGeometry?
     private var monitors: [Any] = []
     private var collapseWork: DispatchWorkItem?
+    private var hookServer: HookServer?
 
     /// Extra slack around the collapsed notch so it's easy to hit with the cursor.
     private let hoverSlop: CGFloat = 8
@@ -32,6 +33,23 @@ final class IslandController {
             MainActor.assumeIsolated { self?.layout() }
         }
         startMouseTracking()
+        startHookServer()
+    }
+
+    private func startHookServer() {
+        let model = model
+        let server = HookServer { envelope in
+            Task { @MainActor in
+                model.lastEvent = envelope
+                model.eventCount += 1
+            }
+        }
+        do {
+            try server.start()
+            hookServer = server
+        } catch {
+            NSLog("MacIsland: failed to start hook server: \(error)")
+        }
     }
 
     /// Sizes the panel to the expanded island and centers it on the notch.
