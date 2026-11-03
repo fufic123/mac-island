@@ -1,33 +1,33 @@
 import Foundation
 
-enum PermissionDecision: Sendable {
+public enum PermissionDecision: Sendable {
     case allow, deny, alwaysAllow
 }
 
 /// A PermissionRequest hook waiting for Allow/Deny; closing without an answer means
 /// "no decision", so Claude's own prompt handles it.
-final class PermissionResponder: @unchecked Sendable {
+public final class PermissionResponder: @unchecked Sendable {
     private let connection: HookConnection
     /// Claude's `permission_suggestions`, sent back as `updatedPermissions` for "Always allow".
     private let suggestions: [Any]?
     /// Button label for the first suggestion, nil when there is none we can describe.
-    let alwaysAllowLabel: String?
+    public let alwaysAllowLabel: String?
 
-    init(connection: HookConnection, suggestions: [Any]? = nil) {
+    public init(connection: HookConnection, suggestions: [Any]? = nil) {
         self.connection = connection
         self.suggestions = suggestions
         self.alwaysAllowLabel = suggestions.flatMap(Self.label(for:))
     }
 
     /// The rule "Always allow" adds, for the confirmation peek.
-    var alwaysAllowRule: String? {
+    public var alwaysAllowRule: String? {
         guard let first = suggestions?.first as? [String: Any],
               let rule = (first["rules"] as? [[String: Any]])?.first
         else { return nil }
         return (rule["ruleContent"] as? String) ?? (rule["toolName"] as? String)
     }
 
-    func respond(_ decision: PermissionDecision) {
+    public func respond(_ decision: PermissionDecision) {
         switch decision {
         case .allow:
             reply(["behavior": "allow"])
@@ -41,7 +41,7 @@ final class PermissionResponder: @unchecked Sendable {
         }
     }
 
-    func close() {
+    public func close() {
         connection.close()
     }
 

@@ -1,4 +1,5 @@
 import AppKit
+import IslandCore
 
 // Private SkyLight API (exported by CoreGraphics). A window in its own space with an absolute
 // level isn't part of any desktop, so it stays put while three-finger swipes slide the desktops

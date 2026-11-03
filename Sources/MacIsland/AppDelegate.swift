@@ -1,4 +1,5 @@
 import AppKit
+import IslandCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {

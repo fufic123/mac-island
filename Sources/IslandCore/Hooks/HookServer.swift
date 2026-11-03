@@ -6,8 +6,8 @@ private let log = Logger(subsystem: "com.fufic123.macisland", category: "hooks")
 /// Listens on a Unix domain socket; each connection carries one newline-terminated JSON envelope.
 /// Connections of hooks that wait for an answer (PermissionRequest, the background Stop hook)
 /// stay open and are handed over as a `HookReply`.
-final class HookServer: @unchecked Sendable {
-    static var defaultSocketPath: String {
+public final class HookServer: @unchecked Sendable {
+    public static var defaultSocketPath: String {
         FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent(".mac-island/island.sock").path
     }
@@ -21,12 +21,12 @@ final class HookServer: @unchecked Sendable {
     /// Upper bound for one message; hook payloads are a few KB at most.
     private let maxMessageSize = 1 << 20
 
-    init(path: String = HookServer.defaultSocketPath, onEvent: @escaping @Sendable (HookEnvelope, HookReply?) -> Void) {
+    public init(path: String = HookServer.defaultSocketPath, onEvent: @escaping @Sendable (HookEnvelope, HookReply?) -> Void) {
         self.path = path
         self.onEvent = onEvent
     }
 
-    func start() throws {
+    public func start() throws {
         try FileManager.default.createDirectory(
             atPath: (path as NSString).deletingLastPathComponent,
             withIntermediateDirectories: true
@@ -71,7 +71,7 @@ final class HookServer: @unchecked Sendable {
         log.info("Listening on \(self.path, privacy: .public)")
     }
 
-    func stop() {
+    public func stop() {
         acceptSource?.cancel()
         acceptSource = nil
     }
@@ -125,5 +125,5 @@ final class HookServer: @unchecked Sendable {
 }
 
 private extension POSIXError {
-    static var current: POSIXError { POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+    public static var current: POSIXError { POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
 }

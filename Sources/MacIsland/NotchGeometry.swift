@@ -1,4 +1,5 @@
 import AppKit
+import IslandCore
 
 /// Physical notch metrics for a screen, in points.
 struct NotchGeometry {

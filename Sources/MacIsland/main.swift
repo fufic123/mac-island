@@ -1,4 +1,5 @@
 import AppKit
+import IslandCore
 
 MainActor.assumeIsolated {
     let app = NSApplication.shared

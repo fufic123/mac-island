@@ -1,9 +1,9 @@
 import Foundation
 
 /// Reads the end of a Claude Code transcript (JSONL under ~/.claude/projects).
-enum Transcript {
+public enum Transcript {
     /// Whether the latest conversation message is the marker Claude writes when the user presses Esc.
-    static func endsWithInterrupt(_ path: String) -> Bool {
+    public static func endsWithInterrupt(_ path: String) -> Bool {
         guard let handle = FileHandle(forReadingAtPath: path) else { return false }
         defer { try? handle.close() }
         guard let size = try? handle.seekToEnd(), size > 0 else { return false }

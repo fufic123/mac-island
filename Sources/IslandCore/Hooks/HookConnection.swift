@@ -2,12 +2,12 @@ import Foundation
 
 /// An open socket to a hook that is blocked waiting for the island's answer.
 /// Whatever is sent becomes the hook's output; closing without sending means "no answer".
-final class HookConnection: @unchecked Sendable {
+public final class HookConnection: @unchecked Sendable {
     private let fd: Int32
     private let lock = NSLock()
     private var isClosed = false
 
-    init(fd: Int32) {
+    public init(fd: Int32) {
         self.fd = fd
         var on: Int32 = 1
         // The hook may already be gone (e.g. answered in the terminal); don't die on SIGPIPE.
@@ -16,7 +16,7 @@ final class HookConnection: @unchecked Sendable {
 
     deinit { close() }
 
-    func send(_ data: Data) {
+    public func send(_ data: Data) {
         lock.lock()
         if !isClosed {
             data.withUnsafeBytes { buf in
@@ -32,7 +32,7 @@ final class HookConnection: @unchecked Sendable {
         close()
     }
 
-    func close() {
+    public func close() {
         lock.lock()
         defer { lock.unlock() }
         guard !isClosed else { return }
@@ -42,7 +42,7 @@ final class HookConnection: @unchecked Sendable {
 }
 
 /// What a blocked hook is waiting for.
-enum HookReply: Sendable {
+public enum HookReply: Sendable {
     /// PermissionRequest: Allow / Deny.
     case permission(PermissionResponder)
     /// Background Stop hook: a typed reply that wakes Claude.

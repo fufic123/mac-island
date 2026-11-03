@@ -1,4 +1,5 @@
 import SwiftUI
+import IslandCore
 
 struct IslandView: View {
     let model: IslandModel
@@ -199,6 +200,10 @@ private struct PeekContent: View {
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(labelColor)
             }
+            // Inset past the body's margin: up here the island meets the menu bar with square
+            // corners, and text close to that edge reads as cut off.
+            .padding(.horizontal, 8)
+            .padding(.top, 3)
             .frame(height: headerHeight)
             if peek.isTall {
                 // Claude's closing line, up to two lines, like the design's "Update".

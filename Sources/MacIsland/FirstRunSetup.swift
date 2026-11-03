@@ -1,5 +1,7 @@
 import AppKit
+import IslandCore
 import ServiceManagement
+import IslandCore
 import os
 
 private let log = Logger(subsystem: "com.fufic123.macisland", category: "setup")

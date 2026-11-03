@@ -5,7 +5,7 @@ import os
 private let log = Logger(subsystem: "com.fufic123.macisland", category: "sessions")
 
 /// Moments worth a short "peek" of the island.
-enum IslandSignal: Sendable {
+public enum IslandSignal: Sendable {
     case permission(project: String, phrase: String)
     case question(project: String)
     case done(sessionId: String, project: String, duration: TimeInterval?, summary: String?)
@@ -18,42 +18,44 @@ enum IslandSignal: Sendable {
 /// Folds hook events into the live list of agent sessions.
 @MainActor
 @Observable
-final class SessionStore {
-    private(set) var sessions: [String: AgentSession] = [:]
+public final class SessionStore {
+    public private(set) var sessions: [String: AgentSession] = [:]
     /// Hooks blocked on a PermissionRequest, waiting for Allow/Deny from the island.
     private var responders: [String: PermissionResponder] = [:]
     /// Background Stop hooks waiting for a typed reply, one per session.
     private var replyWaiters: [String: HookConnection] = [:]
-    @ObservationIgnored var onSignal: ((IslandSignal) -> Void)?
+    @ObservationIgnored public var onSignal: ((IslandSignal) -> Void)?
     /// When the last decision was made; the next queued request slides into the same spot.
     @ObservationIgnored private var lastDecisionAt: Date = .distantPast
     /// Transcript modification date last looked at, per session.
     @ObservationIgnored private var transcriptChecked: [String: Date] = [:]
 
     /// Finished/idle sessions without a known pid are dropped after this long.
-    static let staleAfter: TimeInterval = 30 * 60
+    public static let staleAfter: TimeInterval = 30 * 60
     /// Ignore clicks this soon after a request appears or after the previous decision, so a
     /// click aimed at something else can't approve a request that just slid under the cursor.
-    static let decisionGuardInterval: TimeInterval = 0.6
+    public static let decisionGuardInterval: TimeInterval = 0.6
+
+    public init() {}
 
     /// Attention first, then working, done, idle; most recent first within a group.
-    var sorted: [AgentSession] {
+    public var sorted: [AgentSession] {
         sessions.values.sorted {
             $0.status != $1.status ? $0.status < $1.status : $0.lastEventAt > $1.lastEventAt
         }
     }
 
-    var needsAttention: Bool { sessions.values.contains { $0.status.needsAttention } }
-    var isAnyWorking: Bool { sessions.values.contains { $0.status == .working } }
+    public var needsAttention: Bool { sessions.values.contains { $0.status.needsAttention } }
+    public var isAnyWorking: Bool { sessions.values.contains { $0.status == .working } }
 
     /// Requests answerable from the island, oldest first.
-    var pendingDecisions: [AgentSession] {
+    public var pendingDecisions: [AgentSession] {
         sessions.values
             .filter { $0.awaitingDecision }
             .sorted { ($0.permissionRequestedAt ?? .distantPast) < ($1.permissionRequestedAt ?? .distantPast) }
     }
 
-    func apply(_ envelope: HookEnvelope, reply: HookReply? = nil, at now: Date = .now) {
+    public func apply(_ envelope: HookEnvelope, reply: HookReply? = nil, at now: Date = .now) {
         let p = envelope.payload
         if envelope.awaitReply == true {
             if case let .awaitReply(connection) = reply { registerReplyWaiter(connection, for: envelope) }
@@ -238,7 +240,7 @@ final class SessionStore {
 
     /// Esc in the terminal sends no hook event, but Claude writes "[Request interrupted by user]"
     /// into the transcript. Checked for sessions that look busy, only when the file changed.
-    func checkInterrupts(now: Date = .now) {
+    public func checkInterrupts(now: Date = .now) {
         for (id, s) in sessions where s.status == .working || s.status.needsAttention {
             guard let path = s.transcriptPath,
                   let modified = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date,
@@ -290,7 +292,7 @@ final class SessionStore {
 
     /// Answers a pending permission request from the island. `requestId` is the request the
     /// UI showed; if a newer request has replaced it, the decision is dropped.
-    func decide(sessionId: String, requestId: UUID, decision: PermissionDecision, now: Date = .now) {
+    public func decide(sessionId: String, requestId: UUID, decision: PermissionDecision, now: Date = .now) {
         guard var s = sessions[sessionId],
               s.permissionRequestId == requestId,
               let requestedAt = s.permissionRequestedAt,
@@ -318,7 +320,7 @@ final class SessionStore {
     }
 
     /// Sends a reply typed in the island to Claude via the waiting background Stop hook.
-    func reply(sessionId: String, text: String, now: Date = .now) {
+    public func reply(sessionId: String, text: String, now: Date = .now) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let waiter = replyWaiters.removeValue(forKey: sessionId),
               var s = sessions[sessionId]
@@ -371,7 +373,7 @@ final class SessionStore {
     }
 
     /// Drops sessions whose Claude process is gone (terminal closed without SessionEnd).
-    func prune(now: Date = .now) {
+    public func prune(now: Date = .now) {
         for (id, s) in sessions {
             let dead: Bool
             if let pid = s.pid {

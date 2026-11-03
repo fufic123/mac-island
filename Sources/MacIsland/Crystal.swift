@@ -1,4 +1,5 @@
 import SwiftUI
+import IslandCore
 
 /// "Crystal" design tokens: an obsidian island whose state lives only in the light on its rim.
 enum Crystal {

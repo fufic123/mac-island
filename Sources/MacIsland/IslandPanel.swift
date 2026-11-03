@@ -1,4 +1,5 @@
 import AppKit
+import IslandCore
 
 /// Borderless transparent panel that floats above the menu bar on every Space.
 final class IslandPanel: NSPanel {

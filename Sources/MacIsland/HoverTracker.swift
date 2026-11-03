@@ -1,4 +1,5 @@
 import AppKit
+import IslandCore
 
 /// Reports cursor movement over a view even while the app is inactive.
 /// Needed because a non-activating accessory app doesn't reliably get mouseMoved

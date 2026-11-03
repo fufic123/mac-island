@@ -1,5 +1,7 @@
 import AppKit
+import IslandCore
 import SwiftUI
+import IslandCore
 
 /// Owns the panel, keeps it pinned over the notch, expands it on hover and peeks on events.
 @MainActor
