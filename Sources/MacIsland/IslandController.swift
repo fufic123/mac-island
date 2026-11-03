@@ -78,8 +78,12 @@ final class IslandController {
         let server = HookServer { envelope, reply in
             Task { @MainActor in store.apply(envelope, reply: reply) }
         }
+        let model = model
         pruneTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { _ in
-            MainActor.assumeIsolated { store.prune() }
+            MainActor.assumeIsolated {
+                store.prune()
+                model.clock = .now
+            }
         }
         do {
             try server.start()

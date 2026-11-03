@@ -152,11 +152,21 @@ final class IslandModel {
         )
     }
 
-    /// Light of the collapsed island and open panel: amber while someone waits, emerald while
-    /// anyone works, otherwise dark.
+    /// How long a finished turn keeps the amethyst light before the island goes to sleep.
+    static let finishedGlow: TimeInterval = 5 * 60
+
+    /// Ticks every few seconds so time-based light (the finished glow) fades on schedule.
+    var clock = Date()
+
+    /// Light of the collapsed island and open panel, most urgent first: amber while someone
+    /// waits, emerald while anyone works, amethyst for a few minutes after a finish, then dark.
     var stateGem: Gem {
         if store.needsAttention { return .amber }
         if store.isAnyWorking { return .emerald }
+        if store.sessions.values.contains(where: { s in
+            // finishedAt survives the idle-prompt notification and is cleared by the next prompt.
+            s.finishedAt.map { clock.timeIntervalSince($0) < Self.finishedGlow } ?? false
+        }) { return .amethyst }
         return .obsidian
     }
 }
