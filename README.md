@@ -86,6 +86,27 @@ Only the Xcode Command Line Tools are needed.
 
 `./scripts/install-app.sh --uninstall` and `./scripts/install-hooks.sh --uninstall` undo them. `./scripts/release.sh v0.1.0` builds the app and publishes it as a GitHub release.
 
+## Project structure
+
+```
+Sources/
+  IslandCore/            sessions and the Claude Code hook protocol, no UI (testable on its own)
+    Models/              AgentSession, Subagent, statuses, ToolDescriber
+    Hooks/               hook payloads, Unix socket server, permission replies
+    Sessions/            SessionStore (folds hook events into sessions), transcript reading
+  MacIsland/             the app
+    App/                 entry point, app delegate, first-run setup
+    Window/              notch panel, hover tracking, sticky space, notch geometry
+    Services/            jumping to the session's terminal
+    State/               IslandModel: what the island shows and how big it is
+    UI/DesignSystem/     Crystal tokens, rim light, glyphs, buttons
+    UI/Island/           root view, collapsed island, peeks
+    UI/Panel/            session list, rows, subagents, permission and reply screens
+    UI/Support/          layout helpers
+Checks/IslandCoreChecks/ behaviour checks for the core: swift run IslandCoreChecks
+scripts/                 build, install, hooks, icon, signing, release
+```
+
 ## How it works
 
 Claude Code hooks send each event as JSON over a Unix socket (`~/.mac-island/island.sock`) to the app. Permission prompts keep the hook waiting until you choose in the island; replies are handed back to Claude through a background Stop hook. The app never reads your project folders.

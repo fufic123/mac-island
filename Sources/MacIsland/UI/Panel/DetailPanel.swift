@@ -1,0 +1,152 @@
+import SwiftUI
+import IslandCore
+
+struct DetailPanel: View {
+    let model: IslandModel
+    let session: AgentSession
+    let now: Date
+    let onFocus: () -> Void
+    let onReply: (String) -> Void
+
+    // Draft lives in the model: @State is a macro whose plugin the Command Line Tools lack.
+    @FocusState private var fieldFocused: Bool
+
+    private var draft: Binding<String> {
+        Binding(get: { model.replyDraft }, set: { model.replyDraft = $0 })
+    }
+
+    private var canSend: Bool { !model.replyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Button { model.selectedSessionId = nil } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Crystal.secondary)
+                        StatusGlyph(status: session.status, size: 15)
+                        Text(label)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(labelColor)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                Spacer()
+                Text(time)
+                    .font(.system(size: 13).monospacedDigit())
+                    .foregroundStyle(Crystal.secondary)
+            }
+            .frame(height: model.notchHeight)
+            .padding(.horizontal, 20)
+
+            MeasuredScroll {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(session.projectName)
+                        .font(.system(size: 20, weight: .semibold))
+                        .tracking(-0.4)
+                        .padding(.top, 16)
+                        .padding(.bottom, 8)
+
+                    Text(message)
+                        .font(.system(size: 14))
+                        .lineSpacing(3)
+                        .foregroundStyle(Crystal.body)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        // The message can echo untrusted content (web pages, files), so only web
+                        // links open; file:// and app URL schemes are dropped.
+                        .environment(\.openURL, OpenURLAction { url in
+                            ["http", "https"].contains(url.scheme?.lowercased() ?? "") ? .systemAction : .discarded
+                        })
+
+                    if session.canReply, let suggestion = session.suggestion {
+                        SuggestionButton(text: suggestion, onSend: { onReply(suggestion) }) {
+                            model.replyDraft = suggestion
+                            fieldFocused = true
+                        }
+                        .padding(.top, 16)
+                    }
+
+                    if session.canReply {
+                        TextField("Reply to Claude…", text: draft, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 14))
+                            .lineLimit(1...5)
+                            .focused($fieldFocused)
+                            .onSubmit(send)
+                            .onExitCommand {
+                                fieldFocused = false
+                                model.selectedSessionId = nil
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 11)
+                            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Crystal.codeBackground))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .strokeBorder(fieldFocused ? Crystal.amethyst.opacity(0.55) : .clear, lineWidth: 1.5)
+                            )
+                            .padding(.top, 16)
+                    }
+
+                    HStack(spacing: 10) {
+                        CapsuleButton(title: "Open terminal", background: Crystal.button, foreground: Crystal.text, action: onFocus)
+                        if session.canReply {
+                            CapsuleButton(title: "Send", background: Crystal.amethyst, foreground: Color(hex: 0x170B33), action: send)
+                                .opacity(canSend ? 1 : 0.45)
+                                .disabled(!canSend)
+                        }
+                    }
+                    .padding(.top, 16)
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 20)
+            }
+        }
+        .onChange(of: fieldFocused) { _, focused in model.isComposing = focused }
+        .onDisappear { model.isComposing = false }
+    }
+
+    private func send() {
+        guard canSend else { return }
+        let text = model.replyDraft
+        model.replyDraft = ""
+        fieldFocused = false
+        onReply(text)
+    }
+
+    /// Light Markdown (bold, code, links) as Claude wrote it.
+    private var message: AttributedString {
+        let text = session.lastMessage ?? "No message from Claude yet."
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
+    }
+
+    private var label: String {
+        switch session.status {
+        case .done: "Done"
+        case .working: "Running"
+        case .needsPermission: "Permission"
+        case .question: "Question"
+        case .waitingForInput, .idle: "Idle"
+        }
+    }
+
+    private var labelColor: Color {
+        switch session.status {
+        case .done: Crystal.amethystText
+        case .working: Crystal.emerald
+        case .needsPermission, .question: Crystal.amberText
+        case .waitingForInput, .idle: Crystal.secondary
+        }
+    }
+
+    private var time: String {
+        switch session.status {
+        case .done: Clock.format(session.lastTurnDuration ?? 0)
+        case .working: Clock.format(now.timeIntervalSince(session.turnStartedAt ?? session.startedAt))
+        default: Clock.format(now.timeIntervalSince(session.startedAt))
+        }
+    }
+}
