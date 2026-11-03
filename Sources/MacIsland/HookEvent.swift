@@ -36,6 +36,12 @@ struct ToolInput: Decodable, Sendable {
     let url: String?
     let query: String?
     let description: String?
+    /// AskUserQuestion.
+    let questions: [AskedQuestion]?
+}
+
+struct AskedQuestion: Decodable, Sendable {
+    let question: String?
 }
 
 extension HookEnvelope {

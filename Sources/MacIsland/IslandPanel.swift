@@ -19,8 +19,11 @@ final class IslandPanel: NSPanel {
         isReleasedWhenClosed = false
         // When the cursor is over the island itself, events go to us, not the global monitor.
         acceptsMouseMovedEvents = true
+        becomesKeyOnlyIfNeeded = true
     }
 
-    override var canBecomeKey: Bool { false }
+    // Key-capable so controls get clicks reliably, but `becomesKeyOnlyIfNeeded` keeps it from
+    // taking keyboard focus away from the terminal on a plain button click.
+    override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 }

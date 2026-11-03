@@ -106,7 +106,10 @@ final class HookServer: @unchecked Sendable {
             log.info("\(envelope.payload.hookEventName, privacy: .public) session=\(envelope.payload.sessionId, privacy: .public)")
             if envelope.payload.hookEventName == "PermissionRequest" {
                 keepOpen = true
-                onEvent(envelope, PermissionResponder(fd: client))
+                // permission_suggestions is free-form JSON that Codable can't keep; pass it through raw.
+                let raw = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+                let suggestions = (raw?["payload"] as? [String: Any])?["permission_suggestions"] as? [Any]
+                onEvent(envelope, PermissionResponder(fd: client, suggestions: suggestions))
             } else {
                 onEvent(envelope, nil)
             }

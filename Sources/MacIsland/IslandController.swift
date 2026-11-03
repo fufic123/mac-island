@@ -1,21 +1,26 @@
 import AppKit
 import SwiftUI
 
-/// Owns the panel, keeps it pinned over the notch and expands it on hover.
+/// Owns the panel, keeps it pinned over the notch, expands it on hover and peeks on events.
 @MainActor
 final class IslandController {
     private let store = SessionStore()
     private let model: IslandModel
     private var pruneTimer: Timer?
     private var panel: IslandPanel?
+    private var hosting: NSView?
     private var geometry: NotchGeometry?
     private var monitors: [Any] = []
+    private var expandWork: DispatchWorkItem?
     private var collapseWork: DispatchWorkItem?
+    private var peekWork: DispatchWorkItem?
     private var hookServer: HookServer?
     private var hoverTracker: HoverTracker?
 
-    /// Extra slack around the collapsed notch so it's easy to hit with the cursor.
+    /// Extra slack around the collapsed island so it's easy to hit with the cursor.
     private let hoverSlop: CGFloat = 8
+    /// Brief dwell before expanding, so passing through the menu bar doesn't open it.
+    private let expandDelay: TimeInterval = 0.12
     private let collapseDelay: TimeInterval = 0.15
 
     init() {
@@ -28,12 +33,14 @@ final class IslandController {
         let hosting = IslandHostingView(rootView: IslandView(
             model: model,
             onFocus: { TerminalFocuser.focus($0) },
-            onDecide: { store.decide(sessionId: $0, requestId: $1, allow: $2) }
+            onDecide: { store.decide(sessionId: $0, requestId: $1, decision: $2) }
         ))
         hosting.sizingOptions = []
         panel.contentView = hosting
         self.panel = panel
+        self.hosting = hosting
         hoverTracker = HoverTracker(view: hosting) { [weak self] in self?.updateHover() }
+        store.onSignal = { [weak self] in self?.showPeek(Peek($0)) }
 
         layout()
         panel.orderFrontRegardless()
@@ -65,7 +72,7 @@ final class IslandController {
         }
     }
 
-    /// Sizes the panel to fit the largest island and centers it on the notch.
+    /// Sizes the window to fit the largest island and centers it on the notch.
     private func layout() {
         guard let panel, let screen = NotchGeometry.preferredScreen() else { return }
         let geometry = NotchGeometry(screen: screen)
@@ -73,7 +80,7 @@ final class IslandController {
         model.notchWidth = geometry.notchWidth
         model.notchHeight = geometry.notchHeight
 
-        let size = model.panelSize
+        let size = model.windowSize
         let frame = NSRect(
             x: geometry.screenFrame.midX - size.width / 2,
             y: geometry.screenFrame.maxY - size.height,
@@ -82,6 +89,23 @@ final class IslandController {
         )
         panel.setFrame(frame, display: true)
     }
+
+    // MARK: Peek
+
+    private func showPeek(_ peek: Peek) {
+        peekWork?.cancel()
+        model.peek = peek
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.model.peek?.id == peek.id else { return }
+                self.model.peek = nil
+            }
+        }
+        peekWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + peek.duration, execute: work)
+    }
+
+    // MARK: Hover
 
     private func startMouseTracking() {
         let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDragged]
@@ -119,13 +143,31 @@ final class IslandController {
 
     private func updateHover() {
         guard let rect = hoverRect() else { return }
-        let inside = rect.contains(NSEvent.mouseLocation)
+        let mouse = NSEvent.mouseLocation
+        let inside = rect.contains(mouse)
+        updatePointer(mouse, inside: inside)
 
         if inside {
             collapseWork?.cancel()
             collapseWork = nil
-            if !model.isExpanded { model.isExpanded = true }
-        } else if model.isExpanded, collapseWork == nil {
+            guard !model.isExpanded, expandWork == nil else { return }
+            let work = DispatchWorkItem { [weak self] in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.expandWork = nil
+                    // Still there after the dwell?
+                    guard let rect = self.hoverRect(), rect.contains(NSEvent.mouseLocation) else { return }
+                    self.peekWork?.cancel()
+                    self.model.peek = nil
+                    self.model.isExpanded = true
+                }
+            }
+            expandWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + expandDelay, execute: work)
+        } else {
+            expandWork?.cancel()
+            expandWork = nil
+            guard model.isExpanded, collapseWork == nil else { return }
             let work = DispatchWorkItem { [weak self] in
                 MainActor.assumeIsolated {
                     self?.model.isExpanded = false
@@ -135,5 +177,17 @@ final class IslandController {
             collapseWork = work
             DispatchQueue.main.asyncAfter(deadline: .now() + collapseDelay, execute: work)
         }
+    }
+
+    /// Cursor in the island view's (top-left origin) coordinates, for row hover.
+    private func updatePointer(_ mouse: NSPoint, inside: Bool) {
+        guard inside, model.isExpanded, let panel, let hosting else {
+            if model.pointer != nil { model.pointer = nil }
+            return
+        }
+        let inWindow = panel.convertPoint(fromScreen: mouse)
+        var point = hosting.convert(inWindow, from: nil)
+        if !hosting.isFlipped { point.y = hosting.bounds.height - point.y }
+        model.pointer = point
     }
 }

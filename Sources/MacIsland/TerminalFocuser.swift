@@ -7,6 +7,7 @@ private let log = Logger(subsystem: "com.fufic123.macisland", category: "focus")
 @MainActor
 enum TerminalFocuser {
     static func focus(_ session: AgentSession) {
+        log.info("focus \(session.projectName, privacy: .public) term=\(session.termProgram ?? "-", privacy: .public) tty=\(session.tty ?? "-", privacy: .public) pid=\(session.pid ?? -1)")
         // The tty arrives over the socket, so accept only the "ttysNNN" shape and pass it
         // to AppleScript as an argument rather than splicing it into the source.
         if let tty = session.tty,
@@ -79,7 +80,15 @@ enum TerminalFocuser {
                 // openApplication works from a background app, unlike NSRunningApplication.activate.
                 let config = NSWorkspace.OpenConfiguration()
                 config.activates = true
-                NSWorkspace.shared.openApplication(at: url, configuration: config)
+                // VS Code and its forks (Cursor, Windsurf) all report TERM_PROGRAM=vscode; opening the
+                // project folder with the app raises the window that has it open instead of
+                // whichever window happens to be frontmost.
+                if session.termProgram == "vscode", let cwd = session.cwd {
+                    NSWorkspace.shared.open([URL(fileURLWithPath: cwd)], withApplicationAt: url, configuration: config)
+                } else {
+                    NSWorkspace.shared.openApplication(at: url, configuration: config)
+                }
+                log.info("activated \(app.bundleIdentifier ?? "?", privacy: .public)")
                 return
             }
             guard let parent = parentPid(of: pid) else { break }

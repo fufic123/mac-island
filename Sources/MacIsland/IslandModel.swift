@@ -1,75 +1,141 @@
 import Observation
 import CoreGraphics
+import Foundation
+
+/// A short-lived expansion announcing an event, without hovering.
+struct Peek: Equatable {
+    enum Kind: Equatable {
+        case permission(project: String, phrase: String)
+        case question(project: String)
+        case done(project: String, duration: TimeInterval?)
+        case allowed(project: String, detail: String)
+        case denied
+        case ruleAdded(rule: String, project: String)
+    }
+
+    let id = UUID()
+    let kind: Kind
+
+    init(_ signal: IslandSignal) {
+        switch signal {
+        case let .permission(project, phrase): kind = .permission(project: project, phrase: phrase)
+        case let .question(project): kind = .question(project: project)
+        case let .done(project, duration): kind = .done(project: project, duration: duration)
+        case let .allowed(project, detail): kind = .allowed(project: project, detail: detail)
+        case .denied: kind = .denied
+        case let .ruleAdded(rule, project): kind = .ruleAdded(rule: rule, project: project)
+        }
+    }
+
+    /// How long it stays out before folding back.
+    var duration: TimeInterval {
+        switch kind {
+        case .permission, .question, .done: 6
+        case .allowed, .denied: 1.2
+        case .ruleAdded: 5
+        }
+    }
+
+    var gem: Gem {
+        switch kind {
+        case .permission, .question: .amber
+        case .done: .amethyst
+        case .allowed, .ruleAdded: .emerald
+        case .denied: .obsidian
+        }
+    }
+}
 
 @MainActor
 @Observable
 final class IslandModel {
     let store: SessionStore
     var isExpanded = false
+    var peek: Peek?
     var notchWidth: CGFloat = NotchGeometry.fallbackSize.width
     var notchHeight: CGFloat = NotchGeometry.fallbackSize.height
+    /// Cursor position in the island view's coordinate space, nil when outside.
+    var pointer: CGPoint?
+    /// Session rows in the island view's coordinate space, for hover highlighting.
+    var rowFrames: [String: CGRect] = [:]
+    /// Natural height of the open panel's scrollable body.
+    var panelBodyHeight: CGFloat = 0
 
     init(store: SessionStore) {
         self.store = store
     }
 
-    /// Radius of the outward flares where the island meets the menu bar.
-    static let topCornerRadius: CGFloat = 6
-    static let collapsedBottomRadius: CGFloat = 10
-    static let expandedBottomRadius: CGFloat = 24
-    /// Width of each side "ear" next to the notch in the collapsed state.
-    static let earWidth: CGFloat = 36
-    static let expandedWidth: CGFloat = 480
-    static let rowHeight: CGFloat = 50
-    /// Row with the command preview and Allow/Deny buttons.
-    static let permissionRowHeight: CGFloat = 112
-    static let rowSpacing: CGFloat = 6
-    static let maxVisibleRows = 6
-    static let listTopPadding: CGFloat = 6
-    static let listBottomPadding: CGFloat = 12
-    static let listHorizontalPadding: CGFloat = 12
-    /// Room around the island inside the panel for the attention glow.
-    static let glowPadding: CGFloat = 20
+    enum Mode { case compact, peek, panel }
 
-    /// Ears appear only when there is something to show; otherwise the island hides in the notch.
-    var showsEars: Bool { !store.sessions.isEmpty }
+    static let coordinateSpace = "island"
+    static let compactWidth: CGFloat = 300
+    static let compactRadius: CGFloat = 14
+    static let peekWidth: CGFloat = 400
+    static let peekRowHeight: CGFloat = 38
+    static let peekRadius: CGFloat = 26
+    static let panelWidth: CGFloat = 440
+    static let panelMaxHeight: CGFloat = 620
+    static let panelRadius: CGFloat = 34
+    /// Room around the island inside the window for its shadow.
+    static let shadowPadding: CGFloat = 60
 
-    var collapsedSize: CGSize {
-        let ears = showsEars ? Self.earWidth * 2 : 0
-        return CGSize(width: notchWidth + Self.topCornerRadius * 2 + ears, height: notchHeight)
+    var mode: Mode {
+        if isExpanded { return .panel }
+        return peek == nil ? .compact : .peek
     }
 
-    static func rowHeight(for session: AgentSession) -> CGFloat {
-        session.awaitingDecision ? permissionRowHeight : rowHeight
+    var hasSessions: Bool { !store.sessions.isEmpty }
+
+    /// With no sessions the island hides inside the notch.
+    var compactSize: CGSize {
+        hasSessions
+            ? CGSize(width: max(Self.compactWidth, notchWidth + 88), height: notchHeight + 2)
+            : CGSize(width: notchWidth, height: notchHeight)
     }
 
-    /// Past this the list scrolls.
-    static let maxListHeight = CGFloat(maxVisibleRows) * rowHeight + CGFloat(maxVisibleRows - 1) * rowSpacing
-
-    var listHeight: CGFloat {
-        let sessions = store.sessions.values
-        guard !sessions.isEmpty else { return Self.rowHeight }
-        let rows = sessions.reduce(0) { $0 + Self.rowHeight(for: $1) }
-        return min(rows + CGFloat(sessions.count - 1) * Self.rowSpacing, Self.maxListHeight)
+    var peekSize: CGSize {
+        CGSize(width: Self.peekWidth, height: notchHeight + Self.peekRowHeight + 4)
     }
 
-    var expandedSize: CGSize {
-        CGSize(width: Self.expandedWidth, height: expandedHeight(list: listHeight))
+    var panelSize: CGSize {
+        let height = notchHeight + max(panelBodyHeight, 40)
+        return CGSize(width: Self.panelWidth, height: min(height, Self.panelMaxHeight))
     }
 
     var currentSize: CGSize {
-        isExpanded ? expandedSize : collapsedSize
+        switch mode {
+        case .compact: compactSize
+        case .peek: peekSize
+        case .panel: panelSize
+        }
     }
 
-    /// Fixed panel size that fits the largest island plus its glow.
-    var panelSize: CGSize {
+    var currentRadius: CGFloat {
+        switch mode {
+        case .compact: Self.compactRadius
+        case .peek: Self.peekRadius
+        case .panel: Self.panelRadius
+        }
+    }
+
+    /// Fixed window size that fits the largest island plus its shadow.
+    var windowSize: CGSize {
         CGSize(
-            width: Self.expandedWidth + Self.glowPadding * 2,
-            height: expandedHeight(list: Self.maxListHeight) + Self.glowPadding
+            width: Self.panelWidth + Self.shadowPadding * 2,
+            height: Self.panelMaxHeight + Self.shadowPadding
         )
     }
 
-    private func expandedHeight(list: CGFloat) -> CGFloat {
-        notchHeight + Self.listTopPadding + list + Self.listBottomPadding
+    /// Light of the collapsed island and open panel: amber while someone waits, emerald while
+    /// anyone works, otherwise dark.
+    var stateGem: Gem {
+        if store.needsAttention { return .amber }
+        if store.isAnyWorking { return .emerald }
+        return .obsidian
+    }
+
+    var hoveredSessionId: String? {
+        guard let pointer else { return nil }
+        return rowFrames.first { $0.value.contains(pointer) }?.key
     }
 }
