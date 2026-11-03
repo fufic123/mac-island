@@ -35,7 +35,10 @@ struct Peek: Equatable {
     /// How long it stays out before folding back.
     var duration: TimeInterval {
         switch kind {
-        case .permission, .question, .done: 6
+        case .permission, .question: 6
+        // Claude's closing line stays out for a minute, until it's hovered (which opens it) or
+        // the session starts working again.
+        case .done: 60
         case .allowed, .denied: 1.2
         case .ruleAdded, .replied: 5
         }

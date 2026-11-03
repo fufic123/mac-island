@@ -10,6 +10,8 @@ final class IslandController {
     private let model: IslandModel
     private var pruneTimer: Timer?
     private var interruptTimer: Timer?
+    /// Set after an action closed the island under the cursor; cleared when the cursor leaves.
+    private var holdClosedUntilExit = false
     private var panel: IslandPanel?
     private var hosting: NSView?
     private var geometry: NotchGeometry?
@@ -36,7 +38,10 @@ final class IslandController {
         let store = store
         let hosting = IslandHostingView(rootView: IslandView(
             model: model,
-            onFocus: { TerminalFocuser.focus($0) },
+            onFocus: { [weak self] in
+                TerminalFocuser.focus($0)
+                self?.dismissAfterAction()
+            },
             onDecide: { store.decide(sessionId: $0, requestId: $1, decision: $2) },
             onReply: { [weak self] in self?.sendReply(sessionId: $0, text: $1) }
         ))
@@ -89,7 +94,14 @@ final class IslandController {
             }
         }
         interruptTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
-            MainActor.assumeIsolated { store.checkInterrupts() }
+            MainActor.assumeIsolated {
+                store.checkInterrupts()
+                // A "Done" peek is moot once its session is busy again.
+                if case let .done(sessionId, _, _, _)? = model.peek?.kind,
+                   let status = store.sessions[sessionId]?.status, status == .working || status.needsAttention {
+                    model.peek = nil
+                }
+            }
         }
         do {
             try server.start()
@@ -129,6 +141,20 @@ final class IslandController {
             panel.orderFrontRegardless()
             stickySpace?.add(panel)
         }
+    }
+
+    /// After jumping to a terminal the island folds away and stays shut until the cursor leaves it.
+    private func dismissAfterAction() {
+        expandWork?.cancel()
+        expandWork = nil
+        collapseWork?.cancel()
+        collapseWork = nil
+        peekWork?.cancel()
+        model.peek = nil
+        model.isComposing = false
+        model.isExpanded = false
+        model.selectedSessionId = nil
+        holdClosedUntilExit = true
     }
 
     // MARK: Peek
@@ -187,6 +213,10 @@ final class IslandController {
         let mouse = NSEvent.mouseLocation
         let inside = rect.contains(mouse)
         updatePointer(mouse, inside: inside)
+        if holdClosedUntilExit {
+            guard !inside else { return }
+            holdClosedUntilExit = false
+        }
 
         if inside {
             collapseWork?.cancel()
