@@ -68,6 +68,27 @@ func run() {
         check(store.sessions["s1"]?.suggestion == nil, "a fork during the turn is not a suggestion")
     }
     do {
+        let store = SessionStore()
+        store.apply(envelope(["hook_event_name": "UserPromptSubmit"]))
+        store.apply(envelope(["hook_event_name": "Notification", "notification_type": "idle_prompt"]))
+        check(store.sessions["s1"]?.status == .idle && store.sessions["s1"]?.wasInterrupted == true,
+              "idle prompt mid-turn means Esc while thinking")
+    }
+    do {
+        let store = SessionStore()
+        store.apply(envelope(["hook_event_name": "UserPromptSubmit"]))
+        store.apply(envelope(["hook_event_name": "Stop"]))
+        store.apply(envelope(["hook_event_name": "Notification", "notification_type": "idle_prompt"]))
+        check(store.sessions["s1"]?.status == .waitingForInput, "idle prompt after Stop just waits")
+    }
+    do {
+        let store = SessionStore()
+        store.apply(envelope(["hook_event_name": "UserPromptSubmit"]))
+        store.apply(envelope(["hook_event_name": "StopFailure"]))
+        check(store.sessions["s1"]?.status == .idle && store.sessions["s1"]?.wasInterrupted == false,
+              "an API error ends the turn")
+    }
+    do {
         let dir = FileManager.default.temporaryDirectory
         let interrupted = dir.appendingPathComponent(UUID().uuidString + ".jsonl")
         let quoted = dir.appendingPathComponent(UUID().uuidString + ".jsonl")

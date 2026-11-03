@@ -158,8 +158,19 @@ public final class SessionStore {
                 s.alwaysAllowLabel = responder.alwaysAllowLabel
             }
             onSignal?(.permission(project: s.projectName, phrase: ToolDescriber.permissionPhrase(tool: p.toolName)))
+        case "Notification" where s.status == .working && Self.isIdlePrompt(p):
+            // The terminal is waiting for input mid-turn: Esc while Claude was still thinking,
+            // which writes no interrupt marker and sends no Stop.
+            sessions[p.sessionId] = s
+            markInterrupted(p.sessionId, now: now)
+            return
         case "Notification":
             applyNotification(p, to: &s, now: now)
+        case "StopFailure":
+            // The turn ended on an API error (rate limit, overload, …); Stop doesn't follow.
+            sessions[p.sessionId] = s
+            markInterrupted(p.sessionId, now: now, byUser: false)
+            return
         case "SubagentStart":
             log.info("subagent start type=\(p.agentType ?? "-", privacy: .public)")
             if let id = p.agentId { _ = subagentIndex(&s, id: id, type: p.agentType, now: now) }
@@ -253,11 +264,12 @@ public final class SessionStore {
         }
     }
 
-    private func markInterrupted(_ id: String, now: Date) {
+    private func markInterrupted(_ id: String, now: Date, byUser: Bool = true) {
         releaseResponder(for: id)
         guard var s = sessions[id] else { return }
         s.status = .idle
-        s.wasInterrupted = true
+        s.wasInterrupted = byUser
+        if !byUser { s.lastMessage = "The turn stopped on an API error." }
         s.activity = nil
         s.question = nil
         clearPermission(&s)
@@ -272,7 +284,11 @@ public final class SessionStore {
         s.pendingAgentTasks = []
         s.lastEventAt = now
         sessions[id] = s
-        log.info("\(s.projectName, privacy: .public) interrupted by the user")
+        log.info("\(s.projectName, privacy: .public) \(byUser ? "interrupted by the user" : "stopped on an API error", privacy: .public)")
+    }
+
+    private static func isIdlePrompt(_ p: ClaudeHookPayload) -> Bool {
+        p.notificationType == "idle_prompt" || (p.message?.lowercased().contains("waiting for your input") ?? false)
     }
 
     private func applyNotification(_ p: ClaudeHookPayload, to s: inout AgentSession, now: Date) {
@@ -284,7 +300,7 @@ public final class SessionStore {
                 s.pendingPermission = p.message
                 s.permissionRequestedAt = now
             }
-        } else if p.notificationType == "idle_prompt" || message.contains("waiting for your input") {
+        } else if Self.isIdlePrompt(p) {
             // Only meaningful once Claude has stopped; don't override an active turn.
             if s.status == .done || s.status == .idle { s.status = .waitingForInput }
         }

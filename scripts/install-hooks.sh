@@ -18,7 +18,7 @@ for arg in "$@"; do
   esac
 done
 
-EVENTS='["SessionStart","SessionEnd","UserPromptSubmit","PreToolUse","PostToolUse","PermissionRequest","Notification","Stop","SubagentStart","SubagentStop"]'
+EVENTS='["SessionStart","SessionEnd","UserPromptSubmit","PreToolUse","PostToolUse","PermissionRequest","Notification","Stop","StopFailure","SubagentStart","SubagentStop"]'
 TOOL_EVENTS='["PreToolUse","PostToolUse","PermissionRequest"]'
 
 if $INSTALL; then
