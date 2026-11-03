@@ -5,6 +5,8 @@ import SwiftUI
 @MainActor
 final class IslandController {
     private let model = IslandModel()
+    private let store = SessionStore()
+    private var pruneTimer: Timer?
     private var panel: IslandPanel?
     private var geometry: NotchGeometry?
     private var monitors: [Any] = []
@@ -18,7 +20,7 @@ final class IslandController {
 
     func show() {
         let panel = IslandPanel(contentRect: .zero)
-        let hosting = NSHostingView(rootView: IslandView(model: model))
+        let hosting = NSHostingView(rootView: IslandView(model: model, store: store))
         hosting.sizingOptions = []
         panel.contentView = hosting
         self.panel = panel
@@ -39,12 +41,12 @@ final class IslandController {
     }
 
     private func startHookServer() {
-        let model = model
+        let store = store
         let server = HookServer { envelope in
-            Task { @MainActor in
-                model.lastEvent = envelope
-                model.eventCount += 1
-            }
+            Task { @MainActor in store.apply(envelope) }
+        }
+        pruneTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { _ in
+            MainActor.assumeIsolated { store.prune() }
         }
         do {
             try server.start()

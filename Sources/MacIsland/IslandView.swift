@@ -2,6 +2,7 @@ import SwiftUI
 
 struct IslandView: View {
     let model: IslandModel
+    let store: SessionStore
 
     var body: some View {
         let size = model.currentSize
@@ -27,28 +28,38 @@ struct IslandView: View {
         .animation(.spring(response: 0.38, dampingFraction: 0.78), value: model.isExpanded)
     }
 
+    // Plain readout of the session model; the real list UI comes in step 4.
     private var expandedContent: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Mac Island")
-                .font(.system(size: 13, weight: .semibold))
-            if let event = model.lastEvent {
-                let p = event.payload
-                Text("\(p.hookEventName)\(p.toolName.map { " · \($0)" } ?? "")")
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                Text("\((p.cwd as NSString?)?.lastPathComponent ?? "?") · \(p.sessionId.prefix(8)) · \(event.termProgram ?? "") \(event.tty ?? "")")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                Text("\(model.eventCount) events received")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            } else {
+        VStack(alignment: .leading, spacing: 6) {
+            let sessions = store.sorted
+            if sessions.isEmpty {
                 Text("No agent sessions yet")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
+            ForEach(sessions.prefix(4)) { s in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("\(statusLabel(s.status)) \(s.projectName)\(s.gitBranch.map { " · \($0)" } ?? "")")
+                        .font(.system(size: 12, weight: .medium))
+                    Text(s.pendingPermission ?? s.activity ?? "")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
         }
         .foregroundStyle(.white)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func statusLabel(_ status: SessionStatus) -> String {
+        switch status {
+        case .needsPermission: "🟠 Needs permission ·"
+        case .waitingForInput: "🟠 Waiting ·"
+        case .working: "🟢"
+        case .done: "✅"
+        case .idle: "⚪"
+        }
     }
 }
 

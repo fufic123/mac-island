@@ -5,6 +5,9 @@ struct HookEnvelope: Decodable, Sendable {
     let source: String
     let termProgram: String?
     let tty: String?
+    let claudePid: Int32?
+    /// Resolved by the hook, so the app never reads project folders (TCC-protected).
+    let gitBranch: String?
     let payload: ClaudeHookPayload
 }
 
@@ -16,10 +19,23 @@ struct ClaudeHookPayload: Decodable, Sendable {
     let transcriptPath: String?
     /// PreToolUse / PostToolUse / PermissionRequest.
     let toolName: String?
+    let toolInput: ToolInput?
     /// Notification.
     let message: String?
+    let notificationType: String?
     /// UserPromptSubmit.
     let prompt: String?
+}
+
+/// The handful of tool arguments used to describe what a tool call is doing.
+struct ToolInput: Decodable, Sendable {
+    let command: String?
+    let filePath: String?
+    let path: String?
+    let pattern: String?
+    let url: String?
+    let query: String?
+    let description: String?
 }
 
 extension HookEnvelope {

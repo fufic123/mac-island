@@ -15,8 +15,9 @@ TOOL_EVENTS='["PreToolUse","PostToolUse","PermissionRequest"]'
 
 if $INSTALL; then
   mkdir -p "$DIR"
-  cp scripts/island-hook.sh "$HOOK"
-  chmod +x "$HOOK"
+  chmod +x scripts/island-hook.sh
+  # Symlink, so edits to the hook in the repo take effect without reinstalling.
+  ln -sf "$PWD/scripts/island-hook.sh" "$HOOK"
 fi
 
 mkdir -p "$(dirname "$SETTINGS")"
