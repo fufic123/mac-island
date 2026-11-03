@@ -93,7 +93,11 @@ final class IslandModel {
 
     static let coordinateSpace = "island"
     static let compactWidth: CGFloat = 300
-    static let compactRadius: CGFloat = 16
+    static let compactRadius: CGFloat = 14
+    /// Bottom corner radius of the MacBook's hardware notch.
+    static let notchCornerRadius: CGFloat = 8
+    /// The compact rim's width; the island extends this far below the notch so the line shows.
+    static let notchRimWidth: CGFloat = 2
     static let peekWidth: CGFloat = 400
     static let peekRowHeight: CGFloat = 38
     static let tallPeekBodyHeight: CGFloat = 60
@@ -114,7 +118,7 @@ final class IslandModel {
     /// With no sessions the island hides inside the notch.
     var compactSize: CGSize {
         hasSessions
-            ? CGSize(width: max(Self.compactWidth, notchWidth + 88), height: notchHeight + 2)
+            ? CGSize(width: max(Self.compactWidth, notchWidth + 88), height: notchHeight + Self.notchRimWidth)
             : CGSize(width: notchWidth, height: notchHeight)
     }
 

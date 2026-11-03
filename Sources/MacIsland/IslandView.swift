@@ -9,7 +9,7 @@ struct IslandView: View {
     var body: some View {
         let size = model.currentSize
         let radius = model.currentRadius
-        let shape = IslandShape(radius: radius)
+        let shape = UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius, style: .continuous)
         let shadowPad = IslandModel.shadowPadding
         ZStack(alignment: .top) {
             // Blurring a resizing shadow every frame is the heaviest part of the morph;
@@ -71,7 +71,13 @@ struct IslandView: View {
     private func border(radius: CGFloat) -> some View {
         switch model.mode {
         case .compact:
-            if model.hasSessions { Rim(gem: model.stateGem, radius: radius) }
+            if model.hasSessions {
+                // Traces the hardware notch itself, just outside its edge where the display starts.
+                let line = IslandModel.notchRimWidth
+                Rim(gem: model.stateGem, radius: IslandModel.notchCornerRadius + line)
+                    .frame(width: model.notchWidth + line * 2, height: model.notchHeight + line)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
         case .peek:
             if let peek = model.peek { Rim(gem: peek.gem, radius: radius) }
         case .panel:
@@ -101,7 +107,7 @@ private struct CompactContent: View {
                     .foregroundStyle(gem == .obsidian ? Crystal.secondary : Crystal.text)
             }
         }
-        .padding(.horizontal, IslandOutline.flare + margin)
+        .padding(.horizontal, margin)
         .frame(height: height)
     }
 
