@@ -14,8 +14,17 @@ struct IslandView: View {
         ZStack(alignment: .top) {
             // Blurring a resizing shadow every frame is the heaviest part of the morph;
             // rasterize it on the GPU (padded so the blur isn't clipped).
-            shape
+            // In compact the black is only the notch, so the circles beside it float over the menu bar;
+            // it grows into the island when it opens.
+            let fillsNotch = model.mode == .compact
+            UnevenRoundedRectangle(
+                bottomLeadingRadius: fillsNotch ? IslandModel.notchCornerRadius : radius,
+                bottomTrailingRadius: fillsNotch ? IslandModel.notchCornerRadius : radius,
+                style: .continuous
+            )
                 .fill(.black)
+                .frame(width: fillsNotch ? model.notchWidth : size.width,
+                       height: fillsNotch ? model.notchHeight : size.height)
                 .shadow(color: .black.opacity(model.mode == .compact ? 0 : 0.55), radius: model.mode == .panel ? 25 : 20, y: model.mode == .panel ? 22 : 16)
                 .padding(shadowPad)
                 .drawingGroup()
