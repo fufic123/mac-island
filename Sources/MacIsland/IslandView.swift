@@ -597,6 +597,11 @@ private struct DetailPanel: View {
                         .foregroundStyle(Crystal.body)
                         .fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
+                        // The message can echo untrusted content (web pages, files), so only web
+                        // links open; file:// and app URL schemes are dropped.
+                        .environment(\.openURL, OpenURLAction { url in
+                            ["http", "https"].contains(url.scheme?.lowercased() ?? "") ? .systemAction : .discarded
+                        })
 
                     if session.canReply {
                         TextField("Reply to Claude…", text: draft, axis: .vertical)
