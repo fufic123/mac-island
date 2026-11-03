@@ -164,11 +164,12 @@ final class SessionStore {
         case "SubagentStop":
             log.info("subagent stop type=\(p.agentType ?? "-", privacy: .public)")
             if let id = p.agentId, s.hiddenAgents.contains(id) || !s.subagents.contains(where: { $0.id == id }) {
-                // An internal fork. After a turn, that's the suggested next prompt.
+                // An internal fork, not shown as a subagent. Its text becomes a one-click reply sent
+                // as the user, so only the prompt-suggestion fork qualifies (see isPromptSuggestion).
                 s.hiddenAgents.remove(id)
-                let text = p.lastAssistantMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                let isSuggestion = (p.agentType ?? "").contains("suggestion") || s.status >= .done
-                if isSuggestion, !text.isEmpty, text.count <= 400, !text.contains("\n") { s.suggestion = text }
+                if isPromptSuggestion(p, in: s, now: now) {
+                    s.suggestion = p.lastAssistantMessage?.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
                 break
             }
             let i = p.agentId.flatMap { id in subagentIndex(&s, id: id, type: p.agentType, now: now) }
@@ -198,6 +199,24 @@ final class SessionStore {
         }
         sessions[p.sessionId] = s
         log.info("\(s.projectName, privacy: .public)@\(s.gitBranch ?? "-", privacy: .public) pid=\(s.pid ?? -1) \(String(describing: s.status), privacy: .public): \(s.pendingPermission ?? s.activity ?? "-", privacy: .private)")
+    }
+
+    /// Whether a finished internal fork is Claude Code's prompt suggestion. Its output is sent as
+    /// the user's reply in one click, so this is strict: a real subagent's output (which may echo
+    /// web pages or files) must never qualify. It has to come right after the turn ended, with no
+    /// launched Task unaccounted for, no subagent still running, an agent type that is absent or
+    /// names the suggestion fork, and short single-line text.
+    private func isPromptSuggestion(_ p: ClaudeHookPayload, in s: AgentSession, now: Date) -> Bool {
+        let type = p.agentType ?? ""
+        guard type.isEmpty || type.lowercased().contains("prompt_suggestion") || type.lowercased() == "suggestion",
+              s.status == .done || s.status == .waitingForInput,
+              let finished = s.finishedAt, now.timeIntervalSince(finished) < 60,
+              s.pendingAgentTasks.isEmpty,
+              s.runningSubagents == 0,
+              let text = p.lastAssistantMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty, text.count <= 200, !text.contains("\n")
+        else { return false }
+        return true
     }
 
     /// Index of the subagent, creating it (matched to the oldest launched Task) if it's new.
