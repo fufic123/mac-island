@@ -9,7 +9,7 @@ struct IslandView: View {
     var body: some View {
         let size = model.currentSize
         let radius = model.currentRadius
-        let shape = UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius, style: .continuous)
+        let shape = IslandShape(radius: radius)
         let shadowPad = IslandModel.shadowPadding
         ZStack(alignment: .top) {
             // Blurring a resizing shadow every frame is the heaviest part of the morph;
@@ -88,15 +88,21 @@ private struct CompactContent: View {
 
     var body: some View {
         let gem = model.stateGem
+        let height = model.compactSize.height
+        let diameter = min(24, height - 8)
+        // Same gap to the side as to the bottom, so the circles sit evenly in the corners.
+        let margin = (height - diameter) / 2
         HStack {
-            glyph(for: gem)
+            Bubble(gem: gem, diameter: diameter) { glyph(for: gem) }
             Spacer(minLength: 0)
-            Text("\(model.store.sessions.count)")
-                .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                .foregroundStyle(gem == .obsidian ? Crystal.secondary : Crystal.text)
+            Bubble(gem: gem, diameter: diameter) {
+                Text("\(model.store.sessions.count)")
+                    .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(gem == .obsidian ? Crystal.secondary : Crystal.text)
+            }
         }
-        .padding(.horizontal, 13)
-        .frame(height: model.compactSize.height)
+        .padding(.horizontal, IslandOutline.flare + margin)
+        .frame(height: height)
     }
 
     @ViewBuilder
@@ -105,14 +111,29 @@ private struct CompactContent: View {
         case .amber:
             let question = model.store.sessions.values.contains { $0.status == .question }
                 && !model.store.sessions.values.contains { $0.status == .needsPermission }
-            Glyph(symbol: question ? "questionmark.bubble" : "lock", color: Crystal.amber)
+            Glyph(symbol: question ? "questionmark.bubble" : "lock", color: Crystal.amber, size: 13)
         case .emerald:
-            Equalizer()
+            Equalizer().scaleEffect(0.85)
         case .amethyst:
-            Glyph(symbol: "sparkle", color: Crystal.amethyst)
+            Glyph(symbol: "sparkle", color: Crystal.amethyst, size: 13)
         case .obsidian:
-            Glyph(symbol: "moon", color: Crystal.tertiary, weight: .medium)
+            Glyph(symbol: "moon", color: Crystal.tertiary, size: 13, weight: .medium)
         }
+    }
+}
+
+/// Tinted circle holding a compact glyph or the session count.
+private struct Bubble<Content: View>: View {
+    let gem: Gem
+    let diameter: CGFloat
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        let tint = gem == .obsidian ? Color.white : gem.color
+        content
+            .frame(width: diameter, height: diameter)
+            .background(Circle().fill(tint.opacity(gem == .obsidian ? 0.08 : 0.16)))
+            .overlay(Circle().strokeBorder(tint.opacity(gem == .obsidian ? 0.1 : 0.28), lineWidth: 1))
     }
 }
 

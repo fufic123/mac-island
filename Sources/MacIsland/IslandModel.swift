@@ -93,7 +93,7 @@ final class IslandModel {
 
     static let coordinateSpace = "island"
     static let compactWidth: CGFloat = 300
-    static let compactRadius: CGFloat = 14
+    static let compactRadius: CGFloat = 16
     static let peekWidth: CGFloat = 400
     static let peekRowHeight: CGFloat = 38
     static let tallPeekBodyHeight: CGFloat = 60

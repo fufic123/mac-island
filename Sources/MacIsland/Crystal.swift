@@ -45,7 +45,7 @@ enum Gem: Equatable {
         }
     }
 
-    private var highlight: Color {
+    var highlight: Color {
         switch self {
         case .obsidian: .white.opacity(0.14)
         case .emerald: Color(hex: 0xDCFFF0)
@@ -74,24 +74,6 @@ enum Gem: Equatable {
         case .amethyst: (0.55, 1.5)
         }
     }
-
-    /// Two comets per gradient, which is twice the rim's width, so shifting by one width loops seamlessly.
-    var rimStops: [Gradient.Stop] {
-        // Off the comet the edge is fully dark, so the island reads as pure black with only the light moving.
-        let midOpacity = self == .amber ? 0.75 : 0.65
-        let dim = color.opacity(0), mid = color.opacity(midOpacity)
-        let comet: [(Color, CGFloat)] = [
-            (dim, 0), (dim, 0.17), (mid, 0.29), (color, 0.38), (highlight, 0.42), (color, 0.445), (dim, 0.485),
-        ]
-        var stops: [Gradient.Stop] = []
-        for base: CGFloat in [0, 0.5] {
-            for (c, offset) in comet {
-                stops.append(Gradient.Stop(color: c, location: base + offset))
-            }
-        }
-        stops.append(Gradient.Stop(color: dim, location: 1))
-        return stops
-    }
 }
 
 extension Color {
@@ -106,6 +88,46 @@ extension Color {
     }
 }
 
+/// Outline of the island the way the hardware notch is drawn: the top corners flare outward into
+/// the menu bar, the sides drop straight, the bottom corners are rounded.
+enum IslandOutline {
+    /// Radius of the outward flare at the top corners.
+    static let flare: CGFloat = 6
+
+    /// `closed` gives the fill; open gives the rim (sides and bottom, no top edge).
+    static func path(in rect: CGRect, radius: CGFloat, inset: CGFloat = 0, closed: Bool) -> Path {
+        let f = flare
+        let left = rect.minX + f + inset, right = rect.maxX - f - inset
+        let top = rect.minY, bottom = rect.maxY - inset
+        let r = max(0, min(radius - inset, (right - left) / 2, bottom - top - f))
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: top))
+        p.addQuadCurve(to: CGPoint(x: left, y: top + f), control: CGPoint(x: left, y: top))
+        p.addLine(to: CGPoint(x: left, y: bottom - r))
+        p.addArc(center: CGPoint(x: left + r, y: bottom - r), radius: r,
+                 startAngle: .degrees(180), endAngle: .degrees(90), clockwise: true)
+        p.addLine(to: CGPoint(x: right - r, y: bottom))
+        p.addArc(center: CGPoint(x: right - r, y: bottom - r), radius: r,
+                 startAngle: .degrees(90), endAngle: .degrees(0), clockwise: true)
+        p.addLine(to: CGPoint(x: right, y: top + f))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX, y: top), control: CGPoint(x: right, y: top))
+        if closed { p.closeSubpath() }
+        return p
+    }
+}
+
+/// Filled island silhouette.
+struct IslandShape: Shape {
+    var radius: CGFloat
+    var animatableData: CGFloat {
+        get { radius }
+        set { radius = newValue }
+    }
+    func path(in rect: CGRect) -> Path {
+        IslandOutline.path(in: rect, radius: radius, closed: true)
+    }
+}
+
 /// Sides and bottom of the island; the top merges into the menu bar, so it has no edge.
 struct IslandRimShape: Shape {
     var radius: CGFloat
@@ -117,46 +139,57 @@ struct IslandRimShape: Shape {
     }
 
     func path(in rect: CGRect) -> Path {
-        let r = rect.insetBy(dx: inset, dy: 0)
-        let bottom = rect.maxY - inset
-        let radius = max(0, min(radius - inset, r.width / 2, bottom - r.minY))
-        var p = Path()
-        p.move(to: CGPoint(x: r.minX, y: rect.minY - inset))
-        p.addLine(to: CGPoint(x: r.minX, y: bottom - radius))
-        p.addArc(center: CGPoint(x: r.minX + radius, y: bottom - radius), radius: radius,
-                 startAngle: .degrees(180), endAngle: .degrees(90), clockwise: true)
-        p.addLine(to: CGPoint(x: r.maxX - radius, y: bottom))
-        p.addArc(center: CGPoint(x: r.maxX - radius, y: bottom - radius), radius: radius,
-                 startAngle: .degrees(90), endAngle: .degrees(0), clockwise: true)
-        p.addLine(to: CGPoint(x: r.maxX, y: rect.minY - inset))
-        return p
+        IslandOutline.path(in: rect, radius: radius, inset: inset, closed: false)
     }
 }
 
-/// Rim of a collapsed island or peek: light flowing left to right, or a steady edge.
+/// Rim of a collapsed island or peek: comets of light running along the outline, from the left
+/// flare down, across the bottom and up the right side, or a steady edge.
 struct Rim: View {
     let gem: Gem
     let radius: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var lineWidth: CGFloat { gem == .obsidian ? 1 : 2 }
+    /// Comet length as a fraction of the outline.
+    private static let tail: CGFloat = 0.32
+    private static let segments = 10
 
     var body: some View {
         let shape = IslandRimShape(radius: radius, inset: lineWidth / 2)
         if gem.flows && !reduceMotion {
             TimelineView(.animation(minimumInterval: 1 / 30)) { context in
                 let t = context.date.timeIntervalSinceReferenceDate
-                let phase = (t / gem.period).truncatingRemainder(dividingBy: 1)
-                GeometryReader { geo in
-                    let w = geo.size.width
-                    LinearGradient(stops: gem.rimStops, startPoint: .leading, endPoint: .trailing)
-                        .frame(width: w * 2, height: geo.size.height)
-                        .offset(x: -w + phase * w)
+                // The head runs past the end by a tail's length, so each comet fully leaves before looping.
+                let span = 1 + Self.tail
+                let phase = CGFloat((t / gem.period).truncatingRemainder(dividingBy: 1))
+                ZStack {
+                    comet(shape, head: phase * span)
+                    comet(shape, head: (phase + 0.5).truncatingRemainder(dividingBy: 1) * span)
                 }
-                .mask(shape.stroke(lineWidth: lineWidth))
             }
         } else {
             shape.stroke(gem.color, lineWidth: lineWidth)
+        }
+    }
+
+    private func comet(_ shape: IslandRimShape, head: CGFloat) -> some View {
+        let n = Self.segments
+        let piece = Self.tail / CGFloat(n)
+        return ZStack {
+            ForEach(0..<n, id: \.self) { k in
+                let to = head - CGFloat(k) * piece
+                let from = to - piece
+                // Fades from the head back; slight overlap hides seams between pieces.
+                let strength = pow(1 - Double(k) / Double(n), 1.6)
+                shape.trim(from: max(0, min(1, from)), to: max(0, min(1, to + piece * 0.15)))
+                    .stroke(gem.color.opacity(strength), style: StrokeStyle(lineWidth: lineWidth, lineCap: .butt))
+            }
+            shape.trim(from: max(0, min(1, head - 0.02)), to: max(0, min(1, head)))
+                .stroke(gem.highlight, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+            shape.trim(from: max(0, min(1, head - 0.06)), to: max(0, min(1, head)))
+                .stroke(gem.color.opacity(0.35), style: StrokeStyle(lineWidth: lineWidth * 3, lineCap: .round))
+                .blur(radius: 2)
         }
     }
 }
