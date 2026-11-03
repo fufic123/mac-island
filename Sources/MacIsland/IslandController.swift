@@ -28,7 +28,7 @@ final class IslandController {
         let hosting = IslandHostingView(rootView: IslandView(
             model: model,
             onFocus: { TerminalFocuser.focus($0) },
-            onDecide: { store.decide(sessionId: $0, allow: $1) }
+            onDecide: { store.decide(sessionId: $0, requestId: $1, allow: $2) }
         ))
         hosting.sizingOptions = []
         panel.contentView = hosting

@@ -72,6 +72,8 @@ final class SessionStore {
             if let responder {
                 responders[p.sessionId] = responder
                 s.awaitingDecision = true
+                s.permissionRequestId = UUID()
+                s.permissionRequestedAt = now
             }
         case "Notification":
             applyNotification(p, to: &s)
@@ -99,12 +101,23 @@ final class SessionStore {
         }
     }
 
-    /// Answers a pending permission request from the island.
-    func decide(sessionId: String, allow: Bool) {
-        guard let responder = responders.removeValue(forKey: sessionId) else { return }
+    /// Ignore clicks this soon after a request appears, so a click aimed at something
+    /// else can't approve a request that just popped up under the cursor.
+    static let decisionGuardInterval: TimeInterval = 0.6
+
+    /// Answers a pending permission request from the island. `requestId` is the request the
+    /// UI showed; if a newer request has replaced it, the decision is dropped.
+    func decide(sessionId: String, requestId: UUID, allow: Bool, now: Date = .now) {
+        guard var s = sessions[sessionId],
+              s.permissionRequestId == requestId,
+              let requestedAt = s.permissionRequestedAt,
+              now.timeIntervalSince(requestedAt) >= Self.decisionGuardInterval,
+              let responder = responders.removeValue(forKey: sessionId)
+        else { return }
         allow ? responder.allow() : responder.deny()
-        guard var s = sessions[sessionId] else { return }
         s.awaitingDecision = false
+        s.permissionRequestId = nil
+        s.permissionRequestedAt = nil
         s.pendingPermission = nil
         s.permissionPreview = nil
         s.status = .working
@@ -115,6 +128,8 @@ final class SessionStore {
     private func releaseResponder(for sessionId: String) {
         responders.removeValue(forKey: sessionId)?.close()
         sessions[sessionId]?.awaitingDecision = false
+        sessions[sessionId]?.permissionRequestId = nil
+        sessions[sessionId]?.permissionRequestedAt = nil
     }
 
     /// Drops sessions whose Claude process is gone (terminal closed without SessionEnd).

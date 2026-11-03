@@ -29,6 +29,9 @@ struct AgentSession: Identifiable, Sendable {
     var permissionPreview: String?
     /// A hook is blocked waiting for Allow/Deny from the island.
     var awaitingDecision = false
+    /// Identifies the pending request, so a click can't land on a newer one than was shown.
+    var permissionRequestId: UUID?
+    var permissionRequestedAt: Date?
     let startedAt: Date
     var lastEventAt: Date
     var finishedAt: Date?

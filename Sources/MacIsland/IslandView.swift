@@ -3,7 +3,7 @@ import SwiftUI
 struct IslandView: View {
     let model: IslandModel
     let onFocus: (AgentSession) -> Void
-    let onDecide: (_ sessionId: String, _ allow: Bool) -> Void
+    let onDecide: (_ sessionId: String, _ requestId: UUID, _ allow: Bool) -> Void
 
     private var store: SessionStore { model.store }
     private var spring: Animation { .spring(response: 0.38, dampingFraction: 0.78) }
@@ -78,7 +78,7 @@ private struct AttentionGlow: View {
 private struct SessionList: View {
     let sessions: [AgentSession]
     let onFocus: (AgentSession) -> Void
-    let onDecide: (_ sessionId: String, _ allow: Bool) -> Void
+    let onDecide: (_ sessionId: String, _ requestId: UUID, _ allow: Bool) -> Void
 
     var body: some View {
         // Re-render periodically so relative times stay fresh.
@@ -96,7 +96,7 @@ private struct SessionList: View {
                             session: session,
                             now: context.date,
                             onFocus: { onFocus(session) },
-                            onDecide: { onDecide(session.id, $0) }
+                            onDecide: { requestId, allow in onDecide(session.id, requestId, allow) }
                         )
                     }
                 }
@@ -111,13 +111,13 @@ private struct SessionRow: View {
     let session: AgentSession
     let now: Date
     let onFocus: () -> Void
-    let onDecide: (_ allow: Bool) -> Void
+    let onDecide: (_ requestId: UUID, _ allow: Bool) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             summary
-            if session.awaitingDecision {
-                permissionControls
+            if session.awaitingDecision, let requestId = session.permissionRequestId {
+                permissionControls(requestId: requestId)
             }
         }
         .padding(.horizontal, 12)
@@ -163,19 +163,22 @@ private struct SessionRow: View {
         }
     }
 
-    private var permissionControls: some View {
+    /// The whole command is always reachable (scrolls when long): never approve what you can't see.
+    private func permissionControls(requestId: UUID) -> some View {
         HStack(spacing: 8) {
-            Text(session.permissionPreview ?? session.pendingPermission ?? "")
-                .font(.system(size: 11, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.8))
-                .lineLimit(2)
-                .truncationMode(.tail)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 6)
-                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.5)))
-            IslandButton(title: "Deny", tint: .white.opacity(0.15)) { onDecide(false) }
-            IslandButton(title: "Allow", tint: .orange) { onDecide(true) }
+            ScrollView(.vertical) {
+                Text(session.permissionPreview ?? session.pendingPermission ?? "")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+            }
+            .frame(height: 44)
+            .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.5)))
+            IslandButton(title: "Deny", tint: .white.opacity(0.15)) { onDecide(requestId, false) }
+            IslandButton(title: "Allow", tint: .orange) { onDecide(requestId, true) }
         }
     }
 
