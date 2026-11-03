@@ -27,5 +27,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-codesign --force --sign - "$APP" >/dev/null
+# A stable identity (scripts/make-signing-identity.sh) keeps granted permissions across rebuilds;
+# an ad-hoc signature changes with every build, so macOS treats each build as a new app.
+IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/MacIsland Local Signing/ {print $2; exit}')
+codesign --force --sign "${IDENTITY:--}" "$APP" >/dev/null
+[ -n "$IDENTITY" ] || echo "Signed ad-hoc; run scripts/make-signing-identity.sh once so permissions survive rebuilds."
 echo "Built $APP"
