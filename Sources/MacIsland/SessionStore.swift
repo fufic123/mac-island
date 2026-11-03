@@ -90,7 +90,10 @@ final class SessionStore {
         // Tool calls inside a subagent update that subagent, not the session's own line.
         if let agentId = p.agentId, ["PreToolUse", "PostToolUse"].contains(p.hookEventName),
            p.toolName != "AskUserQuestion" {
-            let i = subagentIndex(&s, id: agentId, type: p.agentType, now: now)
+            guard let i = subagentIndex(&s, id: agentId, type: p.agentType, now: now) else {
+                sessions[p.sessionId] = s
+                return
+            }
             if p.hookEventName == "PreToolUse" {
                 s.subagents[i].activity = ToolDescriber.describe(tool: p.toolName, input: p.toolInput)
             }
@@ -108,6 +111,7 @@ final class SessionStore {
             s.status = .idle
             s.activity = nil
         case "UserPromptSubmit":
+            s.suggestion = nil
             s.status = .working
             s.activity = "Thinking…"
             s.turnStartedAt = now
@@ -120,6 +124,7 @@ final class SessionStore {
             s.question = p.toolInput?.questions?.first?.question
             onSignal?(.question(project: s.projectName))
         case "PreToolUse":
+            s.suggestion = nil
             s.status = .working
             s.activity = ToolDescriber.describe(tool: p.toolName, input: p.toolInput)
             if p.toolName == "Task" || p.toolName == "Agent" {
@@ -154,9 +159,19 @@ final class SessionStore {
         case "Notification":
             applyNotification(p, to: &s, now: now)
         case "SubagentStart":
+            log.info("subagent start type=\(p.agentType ?? "-", privacy: .public)")
             if let id = p.agentId { _ = subagentIndex(&s, id: id, type: p.agentType, now: now) }
         case "SubagentStop":
-            let i = p.agentId.map { id in subagentIndex(&s, id: id, type: p.agentType, now: now) }
+            log.info("subagent stop type=\(p.agentType ?? "-", privacy: .public)")
+            if let id = p.agentId, s.hiddenAgents.contains(id) || !s.subagents.contains(where: { $0.id == id }) {
+                // An internal fork. After a turn, that's the suggested next prompt.
+                s.hiddenAgents.remove(id)
+                let text = p.lastAssistantMessage?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                let isSuggestion = (p.agentType ?? "").contains("suggestion") || s.status >= .done
+                if isSuggestion, !text.isEmpty, text.count <= 400, !text.contains("\n") { s.suggestion = text }
+                break
+            }
+            let i = p.agentId.flatMap { id in subagentIndex(&s, id: id, type: p.agentType, now: now) }
                 ?? s.subagents.firstIndex { $0.state == .running }
             if let i {
                 s.subagents[i].state = .done
@@ -186,13 +201,18 @@ final class SessionStore {
     }
 
     /// Index of the subagent, creating it (matched to the oldest launched Task) if it's new.
-    private func subagentIndex(_ s: inout AgentSession, id: String, type: String?, now: Date) -> Int {
+    /// Nil for Claude Code's internal forks, which start without a Task call.
+    private func subagentIndex(_ s: inout AgentSession, id: String, type: String?, now: Date) -> Int? {
         if let i = s.subagents.firstIndex(where: { $0.id == id }) {
             if s.subagents[i].type == nil { s.subagents[i].type = type }
             return i
         }
-        let match = s.pendingAgentTasks.firstIndex { $0.type == nil || $0.type == type }
-        let launched = match.map { s.pendingAgentTasks.remove(at: $0) }
+        if s.hiddenAgents.contains(id) { return nil }
+        guard let match = s.pendingAgentTasks.firstIndex(where: { $0.type == nil || $0.type == type }) else {
+            s.hiddenAgents.insert(id)
+            return nil
+        }
+        let launched = Optional(s.pendingAgentTasks.remove(at: match))
         s.subagents.append(Subagent(id: id, type: type ?? launched?.type, task: launched?.task, startedAt: now))
         return s.subagents.count - 1
     }
@@ -286,6 +306,7 @@ final class SessionStore {
         else { return }
         waiter.send(Data(text.utf8))
         s.canReply = false
+        s.suggestion = nil
         s.status = .working
         s.activity = "Thinking…"
         s.turnStartedAt = now

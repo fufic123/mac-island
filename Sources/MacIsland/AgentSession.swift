@@ -83,6 +83,11 @@ struct AgentSession: Identifiable, Sendable {
     /// Descriptions of launched Task calls not yet matched to a SubagentStart.
     var pendingAgentTasks: [(task: String?, type: String?)] = []
     var runningSubagents: Int { subagents.filter { $0.state == .running }.count }
+    /// Claude Code's internal forks (prompt suggestion and the like): started without a Task call,
+    /// so not shown as subagents.
+    var hiddenAgents: Set<String> = []
+    /// Claude Code's suggested next prompt (its prompt_suggestion fork), offered as a one-click reply.
+    var suggestion: String?
 
     /// Pending permission, while `status == .needsPermission`.
     var permissionTool: String?
@@ -108,8 +113,11 @@ struct AgentSession: Identifiable, Sendable {
     var finishedAt: Date?
     var lastTurnDuration: TimeInterval?
 
-    /// Clicking the row opens it in the island rather than jumping to the terminal.
-    var opensDetail: Bool { canReply || lastMessage != nil }
+    /// Clicking the row opens it in the island rather than jumping to the terminal. While Claude
+    /// is busy the terminal is where things happen, so the click goes there.
+    var opensDetail: Bool {
+        status != .working && !status.needsAttention && (canReply || lastMessage != nil)
+    }
 
     var projectName: String {
         cwd.map { ($0 as NSString).lastPathComponent } ?? "Unknown"
