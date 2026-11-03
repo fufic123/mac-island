@@ -67,22 +67,31 @@ struct IslandView: View {
         }
     }
 
+    /// One rim for every mode, so it morphs between tracing the notch (compact) and the island's
+    /// edge (peek, panel) instead of jumping. The open panel shows its steady border over it.
     @ViewBuilder
     private func border(radius: CGFloat) -> some View {
-        switch model.mode {
-        case .compact:
-            if model.hasSessions {
-                // Traces the hardware notch itself, just outside its edge where the display starts.
-                let line = IslandModel.notchRimWidth
-                Rim(gem: model.stateGem, radius: IslandModel.notchCornerRadius + line)
-                    .frame(width: model.notchWidth + line * 2, height: model.notchHeight + line)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            }
-        case .peek:
-            if let peek = model.peek { Rim(gem: peek.gem, radius: radius) }
-        case .panel:
-            LitBorder(gem: model.stateGem, radius: radius)
+        let gem: Gem? = switch model.mode {
+        case .compact: model.hasSessions ? model.stateGem : nil
+        case .peek: model.peek?.gem
+        case .panel: model.stateGem
         }
+        let line = IslandModel.notchRimWidth
+        let tracesNotch = model.mode == .compact
+        let rimSize = tracesNotch
+            ? CGSize(width: model.notchWidth + line * 2, height: model.notchHeight + line)
+            : model.currentSize
+        ZStack(alignment: .top) {
+            if let gem {
+                Rim(gem: gem, radius: tracesNotch ? IslandModel.notchCornerRadius + line : radius)
+                    .frame(width: rimSize.width, height: rimSize.height)
+                    .opacity(model.mode == .panel ? 0 : 1)
+                    .transition(.opacity)
+            }
+            LitBorder(gem: model.stateGem, radius: radius)
+                .opacity(model.mode == .panel ? 1 : 0)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
 

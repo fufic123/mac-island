@@ -77,9 +77,9 @@ enum Gem: Equatable {
 
     /// Two comets per gradient, which is twice the rim's width, so shifting by one width loops seamlessly.
     var rimStops: [Gradient.Stop] {
-        // Off the comet the edge is fully dark, so the island reads as pure black with only the light moving.
+        let dimOpacity = self == .amber ? 0.42 : 0.3
         let midOpacity = self == .amber ? 0.75 : 0.65
-        let dim = color.opacity(0), mid = color.opacity(midOpacity)
+        let dim = color.opacity(dimOpacity), mid = color.opacity(midOpacity)
         let comet: [(Color, CGFloat)] = [
             (dim, 0), (dim, 0.17), (mid, 0.29), (color, 0.38), (highlight, 0.42), (color, 0.445), (dim, 0.485),
         ]
