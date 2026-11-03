@@ -70,7 +70,7 @@ final class SessionStore {
             break
         }
         sessions[p.sessionId] = s
-        log.info("\(s.projectName, privacy: .public)@\(s.gitBranch ?? "-", privacy: .public) pid=\(s.pid ?? -1) \(String(describing: s.status), privacy: .public): \(s.pendingPermission ?? s.activity ?? "-", privacy: .public)")
+        log.info("\(s.projectName, privacy: .public)@\(s.gitBranch ?? "-", privacy: .public) pid=\(s.pid ?? -1) \(String(describing: s.status), privacy: .public): \(s.pendingPermission ?? s.activity ?? "-", privacy: .private)")
     }
 
     private func applyNotification(_ p: ClaudeHookPayload, to s: inout AgentSession) {
