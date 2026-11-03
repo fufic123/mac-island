@@ -83,12 +83,19 @@ final class IslandModel {
     var panelBodyHeight: CGFloat = 0
     /// Session opened in detail (last message and reply), nil for the list.
     var selectedSessionId: String? {
-        didSet { if oldValue != selectedSessionId { replyDraft = "" } }
+        didSet {
+            if oldValue != selectedSessionId {
+                replyDraft = ""
+                showsFullMessage = false
+            }
+        }
     }
     /// The reply field has keyboard focus; the island stays open while typing.
     var isComposing = false
     /// Text being typed in the reply field. Cleared when a different session is opened.
     var replyDraft = ""
+    /// The reply screen shows Claude's message cut to its first words until this is set.
+    var showsFullMessage = false
 
     init(store: SessionStore) {
         self.store = store

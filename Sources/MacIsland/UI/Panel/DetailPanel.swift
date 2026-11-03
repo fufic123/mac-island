@@ -61,6 +61,14 @@ struct DetailPanel: View {
                             ["http", "https"].contains(url.scheme?.lowercased() ?? "") ? .systemAction : .discarded
                         })
 
+                    if isShortened {
+                        Button("Show full reply") { model.showsFullMessage = true }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Crystal.amethystText)
+                            .padding(.top, 8)
+                    }
+
                     if session.canReply, let suggestion = session.suggestion {
                         SuggestionButton(text: suggestion, onSend: { onReply(suggestion) }) {
                             model.replyDraft = suggestion
@@ -117,8 +125,27 @@ struct DetailPanel: View {
     }
 
     /// Light Markdown (bold, code, links) as Claude wrote it.
+    /// Words of Claude's message shown before "Show full reply".
+    private static let previewWords = 15
+
+    private var fullText: String { session.lastMessage ?? "No message from Claude yet." }
+
+    private var isShortened: Bool {
+        !model.showsFullMessage && Self.words(fullText).count > Self.previewWords
+    }
+
+    private static func words(_ text: String) -> [Substring] {
+        text.split(whereSeparator: { $0.isWhitespace })
+    }
+
+    /// The first words on one line, then "…", until the full reply is asked for.
+    private var shownText: String {
+        guard isShortened else { return fullText }
+        return Self.words(fullText).prefix(Self.previewWords).joined(separator: " ") + "…"
+    }
+
     private var message: AttributedString {
-        let text = session.lastMessage ?? "No message from Claude yet."
+        let text = shownText
         let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         return (try? AttributedString(markdown: text, options: options)) ?? AttributedString(text)
     }
