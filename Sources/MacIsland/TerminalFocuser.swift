@@ -7,8 +7,12 @@ private let log = Logger(subsystem: "com.fufic123.macisland", category: "focus")
 @MainActor
 enum TerminalFocuser {
     static func focus(_ session: AgentSession) {
-        if let tty = session.tty, let script = tabScript(termProgram: session.termProgram, tty: "/dev/\(tty)") {
-            runAppleScript(script) { ok in
+        // The tty arrives over the socket, so accept only the "ttysNNN" shape and pass it
+        // to AppleScript as an argument rather than splicing it into the source.
+        if let tty = session.tty,
+           tty.range(of: "^ttys?[0-9]{1,4}$", options: .regularExpression) != nil,
+           let script = tabScript(termProgram: session.termProgram) {
+            runAppleScript(script, argument: "/dev/\(tty)") { ok in
                 if !ok { activateOwningApp(of: session) }
             }
         } else {
@@ -16,15 +20,17 @@ enum TerminalFocuser {
         }
     }
 
-    /// Terminal.app and iTerm2 can select a tab by its tty via AppleScript.
-    private static func tabScript(termProgram: String?, tty: String) -> String? {
+    /// Terminal.app and iTerm2 can select a tab by its tty via AppleScript; the tty is `item 1 of argv`.
+    private static func tabScript(termProgram: String?) -> String? {
         switch termProgram {
         case "Apple_Terminal":
             return """
+            on run argv
+            set targetTty to item 1 of argv
             tell application "Terminal"
                 repeat with w in windows
                     repeat with t in tabs of w
-                        if tty of t is "\(tty)" then
+                        if tty of t is targetTty then
                             set selected of t to true
                             set index of w to 1
                             activate
@@ -34,14 +40,17 @@ enum TerminalFocuser {
                 end repeat
             end tell
             error "tab not found"
+            end run
             """
         case "iTerm.app":
             return """
+            on run argv
+            set targetTty to item 1 of argv
             tell application "iTerm2"
                 repeat with w in windows
                     repeat with t in tabs of w
                         repeat with s in sessions of t
-                            if tty of s is "\(tty)" then
+                            if tty of s is targetTty then
                                 select w
                                 select t
                                 select s
@@ -53,6 +62,7 @@ enum TerminalFocuser {
                 end repeat
             end tell
             error "session not found"
+            end run
             """
         default:
             return nil
@@ -88,10 +98,10 @@ enum TerminalFocuser {
     }
 
     /// Runs osascript off the main thread; Automation permission is requested on first use.
-    private static func runAppleScript(_ source: String, completion: @escaping @MainActor (Bool) -> Void) {
+    private static func runAppleScript(_ source: String, argument: String, completion: @escaping @MainActor (Bool) -> Void) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-        process.arguments = ["-e", source]
+        process.arguments = ["-e", source, argument]
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
         process.terminationHandler = { p in
