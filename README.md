@@ -15,6 +15,8 @@
   </a>
 </p>
 
+---
+
 <p align="center">
   <img src="assets/screenshots/sessions.png" width="820" alt="The island opened over the notch, listing three Claude Code sessions and their subagents">
 </p>
@@ -55,7 +57,13 @@ The notch lights up with the state of your sessions, so a glance tells you wheth
 
 ## Install
 
-**Option 1, the button.** Download `MacIsland.zip` with the button above, unzip it and move `MacIsland.app` to Applications. The app isn't notarized, so the first time macOS blocks it: open **System Settings → Privacy & Security** and click **Open Anyway**.
+**Option 1, the button.**
+
+<a href="https://github.com/fufic123/mac-island/releases/latest/download/MacIsland.zip">
+  <img src="https://img.shields.io/badge/Download%20for%20macOS-B18CFF?style=for-the-badge&logoColor=white" height="44" alt="Download for macOS">
+</a>
+
+Download `MacIsland.zip`, unzip it and move `MacIsland.app` to Applications. The app isn't notarized, so the first time macOS blocks it: open **System Settings → Privacy & Security** and click **Open Anyway**.
 
 **Option 2, one command.** Paste this into Terminal. It downloads the latest release to `~/Applications` and opens it, without the Gatekeeper warning:
 
@@ -81,3 +89,7 @@ Only the Xcode Command Line Tools are needed.
 ## How it works
 
 Claude Code hooks send each event as JSON over a Unix socket (`~/.mac-island/island.sock`) to the app. Permission prompts keep the hook waiting until you choose in the island; replies are handed back to Claude through a background Stop hook. The app never reads your project folders.
+
+## License
+
+[MIT](LICENSE)
