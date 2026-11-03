@@ -4,8 +4,8 @@ import SwiftUI
 /// Owns the panel, keeps it pinned over the notch and expands it on hover.
 @MainActor
 final class IslandController {
-    private let model = IslandModel()
     private let store = SessionStore()
+    private let model: IslandModel
     private var pruneTimer: Timer?
     private var panel: IslandPanel?
     private var geometry: NotchGeometry?
@@ -18,9 +18,13 @@ final class IslandController {
     private let hoverSlop: CGFloat = 8
     private let collapseDelay: TimeInterval = 0.15
 
+    init() {
+        model = IslandModel(store: store)
+    }
+
     func show() {
         let panel = IslandPanel(contentRect: .zero)
-        let hosting = NSHostingView(rootView: IslandView(model: model, store: store))
+        let hosting = NSHostingView(rootView: IslandView(model: model))
         hosting.sizingOptions = []
         panel.contentView = hosting
         self.panel = panel
@@ -56,7 +60,7 @@ final class IslandController {
         }
     }
 
-    /// Sizes the panel to the expanded island and centers it on the notch.
+    /// Sizes the panel to fit the largest island and centers it on the notch.
     private func layout() {
         guard let panel, let screen = NotchGeometry.preferredScreen() else { return }
         let geometry = NotchGeometry(screen: screen)
@@ -64,7 +68,7 @@ final class IslandController {
         model.notchWidth = geometry.notchWidth
         model.notchHeight = geometry.notchHeight
 
-        let size = IslandModel.expandedSize
+        let size = model.panelSize
         let frame = NSRect(
             x: geometry.screenFrame.midX - size.width / 2,
             y: geometry.screenFrame.maxY - size.height,
