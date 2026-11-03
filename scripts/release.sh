@@ -7,4 +7,6 @@ TAG=${1:?usage: release.sh <tag>}
 ./scripts/bundle.sh
 rm -f build/MacIsland.zip
 ditto -c -k --keepParent build/MacIsland.app build/MacIsland.zip
-gh release create "$TAG" build/MacIsland.zip --title "Mac Island $TAG" --generate-notes
+# The DMG is for the download button (drag to Applications); the zip is for scripts/install.sh.
+./scripts/make-dmg.sh
+gh release create "$TAG" build/MacIsland.dmg build/MacIsland.zip --title "Mac Island $TAG" --generate-notes

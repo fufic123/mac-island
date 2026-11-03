@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/fufic123/mac-island/releases/latest/download/MacIsland.zip">
+  <a href="https://github.com/fufic123/mac-island/releases/latest/download/MacIsland.dmg">
     <img src="https://img.shields.io/badge/Download%20for%20macOS-B18CFF?style=for-the-badge&logoColor=white" height="44" alt="Download for macOS">
   </a>
 </p>
@@ -59,11 +59,11 @@ The notch lights up with the state of your sessions, so a glance tells you wheth
 
 **Option 1, the button.**
 
-<a href="https://github.com/fufic123/mac-island/releases/latest/download/MacIsland.zip">
+<a href="https://github.com/fufic123/mac-island/releases/latest/download/MacIsland.dmg">
   <img src="https://img.shields.io/badge/Download%20for%20macOS-B18CFF?style=for-the-badge&logoColor=white" height="44" alt="Download for macOS">
 </a>
 
-Download `MacIsland.zip`, unzip it and move `MacIsland.app` to Applications. The app isn't notarized, so the first time macOS blocks it: open **System Settings → Privacy & Security** and click **Open Anyway**.
+Open `MacIsland.dmg` and drag Mac Island to Applications. The app isn't notarized, so the first launch shows "MacIsland Not Opened": click **Done** (not Move to Trash), open **System Settings → Privacy & Security** and click **Open Anyway**. That's needed once.
 
 **Option 2, one command.** Paste this into Terminal. It downloads the latest release to `~/Applications` and opens it, without the Gatekeeper warning:
 
