@@ -24,7 +24,12 @@ final class IslandController {
 
     func show() {
         let panel = IslandPanel(contentRect: .zero)
-        let hosting = NSHostingView(rootView: IslandView(model: model))
+        let store = store
+        let hosting = IslandHostingView(rootView: IslandView(
+            model: model,
+            onFocus: { TerminalFocuser.focus($0) },
+            onDecide: { store.decide(sessionId: $0, allow: $1) }
+        ))
         hosting.sizingOptions = []
         panel.contentView = hosting
         self.panel = panel
@@ -46,8 +51,8 @@ final class IslandController {
 
     private func startHookServer() {
         let store = store
-        let server = HookServer { envelope in
-            Task { @MainActor in store.apply(envelope) }
+        let server = HookServer { envelope, responder in
+            Task { @MainActor in store.apply(envelope, responder: responder) }
         }
         pruneTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { _ in
             MainActor.assumeIsolated { store.prune() }

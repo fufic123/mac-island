@@ -18,12 +18,16 @@ final class IslandModel {
     static let collapsedBottomRadius: CGFloat = 10
     static let expandedBottomRadius: CGFloat = 24
     /// Width of each side "ear" next to the notch in the collapsed state.
-    static let earWidth: CGFloat = 32
-    static let expandedWidth: CGFloat = 420
-    static let rowHeight: CGFloat = 46
+    static let earWidth: CGFloat = 36
+    static let expandedWidth: CGFloat = 480
+    static let rowHeight: CGFloat = 50
+    /// Row with the command preview and Allow/Deny buttons.
+    static let permissionRowHeight: CGFloat = 112
+    static let rowSpacing: CGFloat = 6
     static let maxVisibleRows = 6
-    static let listTopPadding: CGFloat = 4
+    static let listTopPadding: CGFloat = 6
     static let listBottomPadding: CGFloat = 12
+    static let listHorizontalPadding: CGFloat = 12
     /// Room around the island inside the panel for the attention glow.
     static let glowPadding: CGFloat = 20
 
@@ -35,10 +39,22 @@ final class IslandModel {
         return CGSize(width: notchWidth + Self.topCornerRadius * 2 + ears, height: notchHeight)
     }
 
-    var visibleRows: Int { min(max(store.sessions.count, 1), Self.maxVisibleRows) }
+    static func rowHeight(for session: AgentSession) -> CGFloat {
+        session.awaitingDecision ? permissionRowHeight : rowHeight
+    }
+
+    /// Past this the list scrolls.
+    static let maxListHeight = CGFloat(maxVisibleRows) * rowHeight + CGFloat(maxVisibleRows - 1) * rowSpacing
+
+    var listHeight: CGFloat {
+        let sessions = store.sessions.values
+        guard !sessions.isEmpty else { return Self.rowHeight }
+        let rows = sessions.reduce(0) { $0 + Self.rowHeight(for: $1) }
+        return min(rows + CGFloat(sessions.count - 1) * Self.rowSpacing, Self.maxListHeight)
+    }
 
     var expandedSize: CGSize {
-        CGSize(width: Self.expandedWidth, height: expandedHeight(rows: visibleRows))
+        CGSize(width: Self.expandedWidth, height: expandedHeight(list: listHeight))
     }
 
     var currentSize: CGSize {
@@ -49,11 +65,11 @@ final class IslandModel {
     var panelSize: CGSize {
         CGSize(
             width: Self.expandedWidth + Self.glowPadding * 2,
-            height: expandedHeight(rows: Self.maxVisibleRows) + Self.glowPadding
+            height: expandedHeight(list: Self.maxListHeight) + Self.glowPadding
         )
     }
 
-    private func expandedHeight(rows: Int) -> CGFloat {
-        notchHeight + Self.listTopPadding + CGFloat(rows) * Self.rowHeight + Self.listBottomPadding
+    private func expandedHeight(list: CGFloat) -> CGFloat {
+        notchHeight + Self.listTopPadding + list + Self.listBottomPadding
     }
 }

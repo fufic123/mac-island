@@ -2,6 +2,8 @@ import SwiftUI
 
 struct IslandView: View {
     let model: IslandModel
+    let onFocus: (AgentSession) -> Void
+    let onDecide: (_ sessionId: String, _ allow: Bool) -> Void
 
     private var store: SessionStore { model.store }
     private var spring: Animation { .spring(response: 0.38, dampingFraction: 0.78) }
@@ -19,9 +21,10 @@ struct IslandView: View {
             shape.fill(.black)
 
             if model.isExpanded {
-                SessionList(sessions: store.sorted)
+                SessionList(sessions: store.sorted, onFocus: onFocus, onDecide: onDecide)
+                    .frame(height: model.listHeight, alignment: .top)
                     .padding(.top, model.notchHeight + IslandModel.listTopPadding)
-                    .padding(.horizontal, IslandModel.topCornerRadius + 14)
+                    .padding(.horizontal, IslandModel.topCornerRadius + IslandModel.listHorizontalPadding)
                     .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .top)))
             } else if model.showsEars {
                 CollapsedEars(store: store)
@@ -34,6 +37,7 @@ struct IslandView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .animation(spring, value: model.isExpanded)
         .animation(spring, value: store.sessions.count)
+        .animation(spring, value: model.listHeight)
     }
 }
 
@@ -73,12 +77,14 @@ private struct AttentionGlow: View {
 
 private struct SessionList: View {
     let sessions: [AgentSession]
+    let onFocus: (AgentSession) -> Void
+    let onDecide: (_ sessionId: String, _ allow: Bool) -> Void
 
     var body: some View {
         // Re-render periodically so relative times stay fresh.
         TimelineView(.periodic(from: .now, by: 30)) { context in
             ScrollView(.vertical) {
-                VStack(spacing: 0) {
+                VStack(spacing: IslandModel.rowSpacing) {
                     if sessions.isEmpty {
                         Text("No agent sessions")
                             .font(.system(size: 12))
@@ -86,7 +92,12 @@ private struct SessionList: View {
                             .frame(maxWidth: .infinity, minHeight: IslandModel.rowHeight)
                     }
                     ForEach(sessions) { session in
-                        SessionRow(session: session, now: context.date)
+                        SessionRow(
+                            session: session,
+                            now: context.date,
+                            onFocus: { onFocus(session) },
+                            onDecide: { onDecide(session.id, $0) }
+                        )
                     }
                 }
             }
@@ -95,11 +106,35 @@ private struct SessionList: View {
     }
 }
 
+/// One session as a separate card; clicking it jumps to the session's terminal.
 private struct SessionRow: View {
     let session: AgentSession
     let now: Date
+    let onFocus: () -> Void
+    let onDecide: (_ allow: Bool) -> Void
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            summary
+            if session.awaitingDecision {
+                permissionControls
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: IslandModel.rowHeight(for: session))
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.white.opacity(session.status.needsAttention ? 0.1 : 0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(session.status.needsAttention ? Color.orange.opacity(0.5) : .white.opacity(0.08))
+        )
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onTapGesture(perform: onFocus)
+    }
+
+    private var summary: some View {
         HStack(spacing: 10) {
             StatusIndicator(status: session.status)
                 .frame(width: 14)
@@ -126,7 +161,22 @@ private struct SessionRow: View {
                 .font(.system(size: 11).monospacedDigit())
                 .foregroundStyle(.white.opacity(0.45))
         }
-        .frame(height: IslandModel.rowHeight)
+    }
+
+    private var permissionControls: some View {
+        HStack(spacing: 8) {
+            Text(session.permissionPreview ?? session.pendingPermission ?? "")
+                .font(.system(size: 11, design: .monospaced))
+                .foregroundStyle(.white.opacity(0.8))
+                .lineLimit(2)
+                .truncationMode(.tail)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: 8).fill(.black.opacity(0.5)))
+            IslandButton(title: "Deny", tint: .white.opacity(0.15)) { onDecide(false) }
+            IslandButton(title: "Allow", tint: .orange) { onDecide(true) }
+        }
     }
 
     private var detail: String {
@@ -154,6 +204,24 @@ private struct SessionRow: View {
         if minutes < 1 { return "<1m" }
         if minutes < 60 { return "\(minutes)m" }
         return "\(minutes / 60)h \(minutes % 60)m"
+    }
+}
+
+private struct IslandButton: View {
+    let title: String
+    let tint: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 64, height: 30)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(tint))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

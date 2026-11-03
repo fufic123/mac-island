@@ -4,6 +4,7 @@ import os
 private let log = Logger(subsystem: "com.fufic123.macisland", category: "hooks")
 
 /// Listens on a Unix domain socket; each connection carries one newline-terminated JSON envelope.
+/// PermissionRequest connections stay open and are handed over as a `PermissionResponder`.
 final class HookServer: @unchecked Sendable {
     static var defaultSocketPath: String {
         FileManager.default.homeDirectoryForCurrentUser
@@ -11,7 +12,7 @@ final class HookServer: @unchecked Sendable {
     }
 
     private let path: String
-    private let onEvent: @Sendable (HookEnvelope) -> Void
+    private let onEvent: @Sendable (HookEnvelope, PermissionResponder?) -> Void
     private let queue = DispatchQueue(label: "com.fufic123.macisland.hookserver")
     private var listenFD: Int32 = -1
     private var acceptSource: DispatchSourceRead?
@@ -19,7 +20,7 @@ final class HookServer: @unchecked Sendable {
     /// Upper bound for one message; hook payloads are a few KB at most.
     private let maxMessageSize = 1 << 20
 
-    init(path: String = HookServer.defaultSocketPath, onEvent: @escaping @Sendable (HookEnvelope) -> Void) {
+    init(path: String = HookServer.defaultSocketPath, onEvent: @escaping @Sendable (HookEnvelope, PermissionResponder?) -> Void) {
         self.path = path
         self.onEvent = onEvent
     }
@@ -83,7 +84,8 @@ final class HookServer: @unchecked Sendable {
     }
 
     private func handle(_ client: Int32) {
-        defer { close(client) }
+        var keepOpen = false
+        defer { if !keepOpen { close(client) } }
         // Accepted sockets inherit O_NONBLOCK on macOS; read blocking with a short timeout instead.
         _ = fcntl(client, F_SETFL, fcntl(client, F_GETFL) & ~O_NONBLOCK)
         var timeout = timeval(tv_sec: 1, tv_usec: 0)
@@ -102,7 +104,12 @@ final class HookServer: @unchecked Sendable {
         do {
             let envelope = try HookEnvelope.decode(data)
             log.info("\(envelope.payload.hookEventName, privacy: .public) session=\(envelope.payload.sessionId, privacy: .public)")
-            onEvent(envelope)
+            if envelope.payload.hookEventName == "PermissionRequest" {
+                keepOpen = true
+                onEvent(envelope, PermissionResponder(fd: client))
+            } else {
+                onEvent(envelope, nil)
+            }
         } catch {
             log.error("Bad hook message: \(error.localizedDescription, privacy: .public)")
         }

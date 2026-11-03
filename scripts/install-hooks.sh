@@ -28,8 +28,9 @@ tmp=$(mktemp)
 jq --arg cmd "$HOOK" --argjson events "$EVENTS" --argjson toolEvents "$TOOL_EVENTS" --argjson install "$INSTALL" '
   def ours: (.command // "") | contains(".mac-island/hook.sh");
   def strip: map(.hooks |= map(select(ours | not))) | map(select(.hooks | length > 0));
+  # PermissionRequest waits for Allow/Deny from the island, as long as a terminal prompt would.
   def entry($e):
-    { hooks: [{ type: "command", command: $cmd, timeout: 5 }] }
+    { hooks: [{ type: "command", command: $cmd, timeout: (if $e == "PermissionRequest" then 86400 else 5 end) }] }
     + (if ($toolEvents | index($e)) then { matcher: "*" } else {} end);
   .hooks = (.hooks // {})
   | reduce $events[] as $e (.;

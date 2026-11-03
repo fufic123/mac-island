@@ -25,6 +25,10 @@ struct AgentSession: Identifiable, Sendable {
     var activity: String?
     /// What Claude is asking permission for, while `status == .needsPermission`.
     var pendingPermission: String?
+    /// Full command / path the permission is for, shown in the Allow/Deny row.
+    var permissionPreview: String?
+    /// A hook is blocked waiting for Allow/Deny from the island.
+    var awaitingDecision = false
     let startedAt: Date
     var lastEventAt: Date
     var finishedAt: Date?

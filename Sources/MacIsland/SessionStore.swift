@@ -9,6 +9,8 @@ private let log = Logger(subsystem: "com.fufic123.macisland", category: "session
 @Observable
 final class SessionStore {
     private(set) var sessions: [String: AgentSession] = [:]
+    /// Hooks blocked on a PermissionRequest, waiting for Allow/Deny from the island.
+    private var responders: [String: PermissionResponder] = [:]
 
     /// Finished/idle sessions without a known pid are dropped after this long.
     static let staleAfter: TimeInterval = 30 * 60
@@ -22,8 +24,13 @@ final class SessionStore {
 
     var needsAttention: Bool { sessions.values.contains { $0.status.needsAttention } }
 
-    func apply(_ envelope: HookEnvelope, at now: Date = .now) {
+    func apply(_ envelope: HookEnvelope, responder: PermissionResponder? = nil, at now: Date = .now) {
         let p = envelope.payload
+        // Any later event means the request was settled elsewhere (e.g. in the terminal),
+        // so release the waiting hook. Notifications don't settle anything.
+        if p.hookEventName != "Notification" {
+            releaseResponder(for: p.sessionId)
+        }
         if p.hookEventName == "SessionEnd" {
             sessions[p.sessionId] = nil
             return
@@ -46,6 +53,7 @@ final class SessionStore {
             s.status = .working
             s.activity = "Thinking…"
             s.pendingPermission = nil
+            s.permissionPreview = nil
             s.finishedAt = nil
         case "PreToolUse":
             s.status = .working
@@ -56,15 +64,22 @@ final class SessionStore {
             s.status = .working
             s.activity = "Thinking…"
             s.pendingPermission = nil
+            s.permissionPreview = nil
         case "PermissionRequest":
             s.status = .needsPermission
             s.pendingPermission = ToolDescriber.describe(tool: p.toolName, input: p.toolInput)
+            s.permissionPreview = p.toolInput?.command ?? p.toolInput?.filePath ?? p.toolInput?.url
+            if let responder {
+                responders[p.sessionId] = responder
+                s.awaitingDecision = true
+            }
         case "Notification":
             applyNotification(p, to: &s)
         case "Stop":
             s.status = .done
             s.activity = nil
             s.pendingPermission = nil
+            s.permissionPreview = nil
             s.finishedAt = now
         default:
             break
@@ -84,12 +99,35 @@ final class SessionStore {
         }
     }
 
+    /// Answers a pending permission request from the island.
+    func decide(sessionId: String, allow: Bool) {
+        guard let responder = responders.removeValue(forKey: sessionId) else { return }
+        allow ? responder.allow() : responder.deny()
+        guard var s = sessions[sessionId] else { return }
+        s.awaitingDecision = false
+        s.pendingPermission = nil
+        s.permissionPreview = nil
+        s.status = .working
+        s.activity = allow ? "Approved · running" : "Denied · thinking…"
+        sessions[sessionId] = s
+    }
+
+    private func releaseResponder(for sessionId: String) {
+        responders.removeValue(forKey: sessionId)?.close()
+        sessions[sessionId]?.awaitingDecision = false
+    }
+
     /// Drops sessions whose Claude process is gone (terminal closed without SessionEnd).
     func prune(now: Date = .now) {
         for (id, s) in sessions {
+            let dead: Bool
             if let pid = s.pid {
-                if kill(pid, 0) != 0 && errno == ESRCH { sessions[id] = nil }
-            } else if s.status >= .done, now.timeIntervalSince(s.lastEventAt) > Self.staleAfter {
+                dead = kill(pid, 0) != 0 && errno == ESRCH
+            } else {
+                dead = s.status >= .done && now.timeIntervalSince(s.lastEventAt) > Self.staleAfter
+            }
+            if dead {
+                releaseResponder(for: id)
                 sessions[id] = nil
             }
         }
