@@ -22,11 +22,13 @@ final class SessionStore {
     /// Hooks blocked on a PermissionRequest, waiting for Allow/Deny from the island.
     private var responders: [String: PermissionResponder] = [:]
     @ObservationIgnored var onSignal: ((IslandSignal) -> Void)?
+    /// When the last decision was made; the next queued request slides into the same spot.
+    @ObservationIgnored private var lastDecisionAt: Date = .distantPast
 
     /// Finished/idle sessions without a known pid are dropped after this long.
     static let staleAfter: TimeInterval = 30 * 60
-    /// Ignore clicks this soon after a request appears, so a click aimed at something
-    /// else can't approve a request that just popped up under the cursor.
+    /// Ignore clicks this soon after a request appears or after the previous decision, so a
+    /// click aimed at something else can't approve a request that just slid under the cursor.
     static let decisionGuardInterval: TimeInterval = 0.6
 
     /// Attention first, then working, done, idle; most recent first within a group.
@@ -150,10 +152,12 @@ final class SessionStore {
               s.permissionRequestId == requestId,
               let requestedAt = s.permissionRequestedAt,
               now.timeIntervalSince(requestedAt) >= Self.decisionGuardInterval,
+              now.timeIntervalSince(lastDecisionAt) >= Self.decisionGuardInterval,
               let responder = responders.removeValue(forKey: sessionId)
         else { return }
         let rule = responder.alwaysAllowRule
         responder.respond(decision)
+        lastDecisionAt = now
 
         let command = s.permissionTool == "Bash" ? ToolDescriber.firstLine(s.permissionPreview, limit: 30) : nil
         switch decision {

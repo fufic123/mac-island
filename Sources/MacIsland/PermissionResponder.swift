@@ -41,8 +41,9 @@ final class PermissionResponder: @unchecked Sendable {
         case .deny:
             reply(["behavior": "deny", "message": "Denied from Mac Island"])
         case .alwaysAllow:
+            // Send back only the suggestion the button described, nothing the user didn't see.
             var body: [String: Any] = ["behavior": "allow"]
-            if let suggestions { body["updatedPermissions"] = suggestions }
+            if alwaysAllowLabel != nil, let first = suggestions?.first { body["updatedPermissions"] = [first] }
             reply(body)
         }
     }
