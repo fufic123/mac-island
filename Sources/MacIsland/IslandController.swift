@@ -179,15 +179,16 @@ final class IslandController {
         }
     }
 
-    /// Cursor in the island view's (top-left origin) coordinates, for row hover.
+    /// Finds the row under the cursor (island view coordinates, top-left origin).
+    /// Writes to the model only when it changes, so mouse moves don't re-render the island.
     private func updatePointer(_ mouse: NSPoint, inside: Bool) {
-        guard inside, model.isExpanded, let panel, let hosting else {
-            if model.pointer != nil { model.pointer = nil }
-            return
+        var hovered: String?
+        if inside, model.isExpanded, let panel, let hosting {
+            let inWindow = panel.convertPoint(fromScreen: mouse)
+            var point = hosting.convert(inWindow, from: nil)
+            if !hosting.isFlipped { point.y = hosting.bounds.height - point.y }
+            hovered = model.rowFrames.first { $0.value.contains(point) }?.key
         }
-        let inWindow = panel.convertPoint(fromScreen: mouse)
-        var point = hosting.convert(inWindow, from: nil)
-        if !hosting.isFlipped { point.y = hosting.bounds.height - point.y }
-        model.pointer = point
+        if model.hoveredSessionId != hovered { model.hoveredSessionId = hovered }
     }
 }

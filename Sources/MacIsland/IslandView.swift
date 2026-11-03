@@ -9,11 +9,21 @@ struct IslandView: View {
         let size = model.currentSize
         let radius = model.currentRadius
         let shape = UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius, style: .continuous)
+        let shadowPad = IslandModel.shadowPadding
         ZStack(alignment: .top) {
+            // Blurring a resizing shadow every frame is the heaviest part of the morph;
+            // rasterize it on the GPU (padded so the blur isn't clipped).
             shape
                 .fill(.black)
                 .shadow(color: .black.opacity(model.mode == .compact ? 0 : 0.55), radius: model.mode == .panel ? 25 : 20, y: model.mode == .panel ? 22 : 16)
+                .padding(shadowPad)
+                .drawingGroup()
+                .padding(-shadowPad)
+            // Content is laid out once at its final size and only revealed by the animating
+            // silhouette, instead of being re-laid-out (scroll view and all) on every frame.
             content
+                .frame(width: size.width, height: size.height, alignment: .top)
+                .transaction { $0.animation = nil }
                 .frame(width: size.width, height: size.height, alignment: .top)
                 .clipShape(shape)
             border(radius: radius)
@@ -34,22 +44,25 @@ struct IslandView: View {
         .foregroundStyle(Crystal.text)
     }
 
+    /// Carries its own animation, since the content's layout transaction is not animated.
+    private static let fade = AnyTransition.opacity.animation(.easeOut(duration: 0.18))
+
     @ViewBuilder
     private var content: some View {
         switch model.mode {
         case .compact:
             if model.hasSessions {
                 CompactContent(model: model)
-                    .transition(.opacity)
+                    .transition(Self.fade)
             }
         case .peek:
             if let peek = model.peek {
                 PeekContent(peek: peek, headerHeight: model.notchHeight)
-                    .transition(.opacity)
+                    .transition(Self.fade)
             }
         case .panel:
             PanelContent(model: model, onFocus: onFocus, onDecide: onDecide)
-                .transition(.opacity)
+                .transition(Self.fade)
         }
     }
 

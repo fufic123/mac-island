@@ -54,10 +54,11 @@ final class IslandModel {
     var peek: Peek?
     var notchWidth: CGFloat = NotchGeometry.fallbackSize.width
     var notchHeight: CGFloat = NotchGeometry.fallbackSize.height
-    /// Cursor position in the island view's coordinate space, nil when outside.
-    var pointer: CGPoint?
-    /// Session rows in the island view's coordinate space, for hover highlighting.
-    var rowFrames: [String: CGRect] = [:]
+    /// Session rows in the island view's coordinate space, for hover highlighting. Not observed:
+    /// rows report new frames on every animation frame, and re-rendering for that drops frames.
+    @ObservationIgnored var rowFrames: [String: CGRect] = [:]
+    /// Row under the cursor; changes only when the cursor crosses into another row.
+    var hoveredSessionId: String?
     /// Natural height of the open panel's scrollable body.
     var panelBodyHeight: CGFloat = 0
 
@@ -132,10 +133,5 @@ final class IslandModel {
         if store.needsAttention { return .amber }
         if store.isAnyWorking { return .emerald }
         return .obsidian
-    }
-
-    var hoveredSessionId: String? {
-        guard let pointer else { return nil }
-        return rowFrames.first { $0.value.contains(pointer) }?.key
     }
 }
