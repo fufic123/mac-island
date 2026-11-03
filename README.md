@@ -92,4 +92,4 @@ Claude Code hooks send each event as JSON over a Unix socket (`~/.mac-island/isl
 
 ## License
 
-[MIT](LICENSE)
+[PolyForm Noncommercial 1.0.0](LICENSE). Free for personal, educational and other noncommercial use. Commercial use requires permission from the author.
