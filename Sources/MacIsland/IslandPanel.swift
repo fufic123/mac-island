@@ -15,6 +15,9 @@ final class IslandPanel: NSPanel {
         isMovable = false
         // Menu bar is .mainMenu (24); .statusBar (25) draws on top of it.
         level = .statusBar
+        // As a regular (Dock) app it can be deactivated or hidden; the island must stay put.
+        hidesOnDeactivate = false
+        canHide = false
         collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
         isReleasedWhenClosed = false
         // When the cursor is over the island itself, events go to us, not the global monitor.
