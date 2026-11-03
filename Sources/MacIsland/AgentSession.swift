@@ -38,6 +38,25 @@ enum SessionGroup: Int, CaseIterable, Sendable {
     }
 }
 
+/// A subagent launched by a session's Task / Agent tool.
+struct Subagent: Identifiable, Sendable {
+    enum State: Sendable { case running, done, stopped }
+
+    let id: String
+    var type: String?
+    /// What it was asked to do (the Task tool's description).
+    var task: String?
+    /// Its current tool call while running.
+    var activity: String?
+    var state: State = .running
+    let startedAt: Date
+    var finishedAt: Date?
+    /// First line of its final message.
+    var summary: String?
+
+    var title: String { task ?? type.map { $0 == "general-purpose" ? "Agent" : $0 } ?? "Agent" }
+}
+
 struct AgentSession: Identifiable, Sendable {
     let id: String
     var cwd: String?
@@ -54,9 +73,21 @@ struct AgentSession: Identifiable, Sendable {
     var lastMessage: String?
     /// The background Stop hook is waiting, so a reply typed in the island reaches Claude.
     var canReply = false
+    /// Where Claude writes the conversation (under ~/.claude, readable without TCC prompts).
+    var transcriptPath: String?
+    /// The user stopped the turn with Esc; Claude sends no Stop event for that.
+    var wasInterrupted = false
+
+    /// Subagents of the current turn, in launch order.
+    var subagents: [Subagent] = []
+    /// Descriptions of launched Task calls not yet matched to a SubagentStart.
+    var pendingAgentTasks: [(task: String?, type: String?)] = []
+    var runningSubagents: Int { subagents.filter { $0.state == .running }.count }
 
     /// Pending permission, while `status == .needsPermission`.
     var permissionTool: String?
+    /// The subagent asking, if it isn't the main agent.
+    var permissionAgentId: String?
     /// e.g. "Wants to run rm -rf node_modules".
     var pendingPermission: String?
     /// Full command / path the permission is for.

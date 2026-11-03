@@ -7,6 +7,7 @@ final class IslandController {
     private let store = SessionStore()
     private let model: IslandModel
     private var pruneTimer: Timer?
+    private var interruptTimer: Timer?
     private var panel: IslandPanel?
     private var hosting: NSView?
     private var geometry: NotchGeometry?
@@ -84,6 +85,9 @@ final class IslandController {
                 store.prune()
                 model.clock = .now
             }
+        }
+        interruptTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
+            MainActor.assumeIsolated { store.checkInterrupts() }
         }
         do {
             try server.start()

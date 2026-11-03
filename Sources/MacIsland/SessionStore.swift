@@ -27,6 +27,8 @@ final class SessionStore {
     @ObservationIgnored var onSignal: ((IslandSignal) -> Void)?
     /// When the last decision was made; the next queued request slides into the same spot.
     @ObservationIgnored private var lastDecisionAt: Date = .distantPast
+    /// Transcript modification date last looked at, per session.
+    @ObservationIgnored private var transcriptChecked: [String: Date] = [:]
 
     /// Finished/idle sessions without a known pid are dropped after this long.
     static let staleAfter: TimeInterval = 30 * 60
@@ -63,9 +65,11 @@ final class SessionStore {
         if ["UserPromptSubmit", "PreToolUse", "SessionEnd"].contains(p.hookEventName) {
             releaseReplyWaiter(for: p.sessionId)
         }
-        // Any later event means the request was settled elsewhere (e.g. in the terminal),
-        // so release the waiting hook. Notifications don't settle anything.
-        if p.hookEventName != "Notification" {
+        // A later event from the same agent means the request was settled elsewhere (e.g. in the
+        // terminal), so release the waiting hook. Notifications don't settle anything, and other
+        // subagents keep working while one waits.
+        if p.hookEventName == "UserPromptSubmit"
+            || (p.hookEventName != "Notification" && sessions[p.sessionId]?.permissionAgentId == p.agentId) {
             releaseResponder(for: p.sessionId)
         }
         if p.hookEventName == "SessionEnd" {
@@ -81,6 +85,23 @@ final class SessionStore {
         if let term = envelope.termProgram, !term.isEmpty { s.termProgram = term }
         if let tty = envelope.tty, !tty.isEmpty { s.tty = tty }
         if let pid = envelope.claudePid { s.pid = pid }
+        if let path = p.transcriptPath, p.agentId == nil { s.transcriptPath = path }
+
+        // Tool calls inside a subagent update that subagent, not the session's own line.
+        if let agentId = p.agentId, ["PreToolUse", "PostToolUse"].contains(p.hookEventName),
+           p.toolName != "AskUserQuestion" {
+            let i = subagentIndex(&s, id: agentId, type: p.agentType, now: now)
+            if p.hookEventName == "PreToolUse" {
+                s.subagents[i].activity = ToolDescriber.describe(tool: p.toolName, input: p.toolInput)
+            }
+            if p.hookEventName == "PostToolUse", s.permissionAgentId == agentId { clearPermission(&s) }
+            if s.status == .needsPermission, s.pendingPermission == nil { s.status = .working }
+            sessions[p.sessionId] = s
+            return
+        }
+        if ["UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest"].contains(p.hookEventName) {
+            s.wasInterrupted = false
+        }
 
         switch p.hookEventName {
         case "SessionStart":
@@ -92,6 +113,8 @@ final class SessionStore {
             s.turnStartedAt = now
             s.finishedAt = nil
             clearPermission(&s)
+            s.subagents.removeAll { $0.state != .running }
+            s.pendingAgentTasks = []
         case "PreToolUse" where p.toolName == "AskUserQuestion":
             s.status = .question
             s.question = p.toolInput?.questions?.first?.question
@@ -99,6 +122,9 @@ final class SessionStore {
         case "PreToolUse":
             s.status = .working
             s.activity = ToolDescriber.describe(tool: p.toolName, input: p.toolInput)
+            if p.toolName == "Task" || p.toolName == "Agent" {
+                s.pendingAgentTasks.append((p.toolInput?.description, p.toolInput?.subagentType))
+            }
             if s.turnStartedAt == nil { s.turnStartedAt = now }
             s.finishedAt = nil
         case "PostToolUse":
@@ -117,6 +143,7 @@ final class SessionStore {
             s.permissionPreview = p.toolInput?.command ?? p.toolInput?.filePath ?? p.toolInput?.url
             s.permissionReason = p.toolName == "Bash" ? p.toolInput?.description : nil
             s.permissionRequestedAt = now
+            s.permissionAgentId = p.agentId
             if let responder {
                 responders[p.sessionId] = responder
                 s.awaitingDecision = true
@@ -126,6 +153,17 @@ final class SessionStore {
             onSignal?(.permission(project: s.projectName, phrase: ToolDescriber.permissionPhrase(tool: p.toolName)))
         case "Notification":
             applyNotification(p, to: &s, now: now)
+        case "SubagentStart":
+            if let id = p.agentId { _ = subagentIndex(&s, id: id, type: p.agentType, now: now) }
+        case "SubagentStop":
+            let i = p.agentId.map { id in subagentIndex(&s, id: id, type: p.agentType, now: now) }
+                ?? s.subagents.firstIndex { $0.state == .running }
+            if let i {
+                s.subagents[i].state = .done
+                s.subagents[i].activity = nil
+                s.subagents[i].finishedAt = now
+                s.subagents[i].summary = ToolDescriber.summary(p.lastAssistantMessage)
+            }
         case "Stop":
             let wasWorking = s.status == .working || s.status.needsAttention
             s.status = .done
@@ -145,6 +183,55 @@ final class SessionStore {
         }
         sessions[p.sessionId] = s
         log.info("\(s.projectName, privacy: .public)@\(s.gitBranch ?? "-", privacy: .public) pid=\(s.pid ?? -1) \(String(describing: s.status), privacy: .public): \(s.pendingPermission ?? s.activity ?? "-", privacy: .private)")
+    }
+
+    /// Index of the subagent, creating it (matched to the oldest launched Task) if it's new.
+    private func subagentIndex(_ s: inout AgentSession, id: String, type: String?, now: Date) -> Int {
+        if let i = s.subagents.firstIndex(where: { $0.id == id }) {
+            if s.subagents[i].type == nil { s.subagents[i].type = type }
+            return i
+        }
+        let match = s.pendingAgentTasks.firstIndex { $0.type == nil || $0.type == type }
+        let launched = match.map { s.pendingAgentTasks.remove(at: $0) }
+        s.subagents.append(Subagent(id: id, type: type ?? launched?.type, task: launched?.task, startedAt: now))
+        return s.subagents.count - 1
+    }
+
+    /// Esc in the terminal sends no hook event, but Claude writes "[Request interrupted by user]"
+    /// into the transcript. Checked for sessions that look busy, only when the file changed.
+    func checkInterrupts(now: Date = .now) {
+        for (id, s) in sessions where s.status == .working || s.status.needsAttention {
+            guard let path = s.transcriptPath,
+                  let modified = (try? FileManager.default.attributesOfItem(atPath: path))?[.modificationDate] as? Date,
+                  modified != transcriptChecked[id]
+            else { continue }
+            transcriptChecked[id] = modified
+            // An interrupt written before this turn started is the previous turn's.
+            guard modified > (s.turnStartedAt ?? .distantPast), Transcript.endsWithInterrupt(path) else { continue }
+            markInterrupted(id, now: now)
+        }
+    }
+
+    private func markInterrupted(_ id: String, now: Date) {
+        releaseResponder(for: id)
+        guard var s = sessions[id] else { return }
+        s.status = .idle
+        s.wasInterrupted = true
+        s.activity = nil
+        s.question = nil
+        clearPermission(&s)
+        s.lastTurnDuration = s.turnStartedAt.map { now.timeIntervalSince($0) }
+        s.turnStartedAt = nil
+        s.finishedAt = nil
+        for i in s.subagents.indices where s.subagents[i].state == .running {
+            s.subagents[i].state = .stopped
+            s.subagents[i].activity = nil
+            s.subagents[i].finishedAt = now
+        }
+        s.pendingAgentTasks = []
+        s.lastEventAt = now
+        sessions[id] = s
+        log.info("\(s.projectName, privacy: .public) interrupted by the user")
     }
 
     private func applyNotification(_ p: ClaudeHookPayload, to s: inout AgentSession, now: Date) {
@@ -227,6 +314,7 @@ final class SessionStore {
 
     private func clearPermission(_ s: inout AgentSession) {
         s.permissionTool = nil
+        s.permissionAgentId = nil
         s.pendingPermission = nil
         s.permissionPreview = nil
         s.permissionReason = nil
@@ -255,6 +343,7 @@ final class SessionStore {
                 releaseResponder(for: id)
                 releaseReplyWaiter(for: id)
                 sessions[id] = nil
+                transcriptChecked[id] = nil
             }
         }
     }

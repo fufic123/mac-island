@@ -27,8 +27,11 @@ struct ClaudeHookPayload: Decodable, Sendable {
     let notificationType: String?
     /// UserPromptSubmit.
     let prompt: String?
-    /// Stop: Claude's final text of the turn.
+    /// Stop / SubagentStop: the agent's final text.
     let lastAssistantMessage: String?
+    /// Set when the event comes from inside a subagent, and on SubagentStart / SubagentStop.
+    let agentId: String?
+    let agentType: String?
 }
 
 /// The handful of tool arguments used to describe what a tool call is doing.
@@ -40,6 +43,8 @@ struct ToolInput: Decodable, Sendable {
     let url: String?
     let query: String?
     let description: String?
+    /// Task / Agent: which kind of subagent to launch.
+    let subagentType: String?
     /// AskUserQuestion.
     let questions: [AskedQuestion]?
 }

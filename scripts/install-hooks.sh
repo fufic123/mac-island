@@ -10,7 +10,7 @@ SETTINGS="$HOME/.claude/settings.json"
 INSTALL=true
 [ "${1:-}" = "--uninstall" ] && INSTALL=false
 
-EVENTS='["SessionStart","SessionEnd","UserPromptSubmit","PreToolUse","PostToolUse","PermissionRequest","Notification","Stop","SubagentStop"]'
+EVENTS='["SessionStart","SessionEnd","UserPromptSubmit","PreToolUse","PostToolUse","PermissionRequest","Notification","Stop","SubagentStart","SubagentStop"]'
 TOOL_EVENTS='["PreToolUse","PostToolUse","PermissionRequest"]'
 
 if $INSTALL; then

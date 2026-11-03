@@ -126,6 +126,20 @@ private struct CompactContent: View {
         let margin = (height - diameter) / 2
         HStack {
             Bubble(gem: gem, diameter: diameter) { glyph(for: gem) }
+                .overlay(alignment: .topTrailing) {
+                    let agents = model.store.sessions.values.reduce(0) { $0 + $1.runningSubagents }
+                    if agents > 0 {
+                        // Running subagents across all sessions.
+                        Text("\(agents)")
+                            .font(.system(size: 9, weight: .bold).monospacedDigit())
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 3.5)
+                            .frame(minWidth: 13, minHeight: 13)
+                            .background(Capsule().fill(Crystal.emerald))
+                            .overlay(Capsule().strokeBorder(.black, lineWidth: 1.5))
+                            .offset(x: 5, y: -3)
+                    }
+                }
             Spacer(minLength: 0)
             Bubble(gem: gem, diameter: diameter) {
                 Text("\(model.store.sessions.count)")
@@ -418,9 +432,38 @@ private struct SessionRow: View {
     let onFocus: () -> Void
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            mainLine
+            if !session.subagents.isEmpty {
+                SubagentList(subagents: session.subagents, now: now)
+                    .padding(.leading, 12 + 18 + 14)
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 10)
+            }
+        }
+        .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(isHovered ? Crystal.rowHover : .clear))
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onFocus)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: RowFramesKey.self,
+                    value: [session.id: geo.frame(in: .named(IslandModel.coordinateSpace))]
+                )
+            }
+        )
+    }
+
+    private var mainLine: some View {
         HStack(spacing: 14) {
-            StatusGlyph(status: session.status)
-                .frame(width: 18)
+            Group {
+                if session.wasInterrupted {
+                    Glyph(symbol: "stop.circle", color: Crystal.tertiary, size: 17, weight: .medium)
+                } else {
+                    StatusGlyph(status: session.status)
+                }
+            }
+            .frame(width: 18)
             VStack(alignment: .leading, spacing: 3) {
                 Text(session.projectName)
                     .font(.system(size: 15, weight: .semibold))
@@ -451,21 +494,11 @@ private struct SessionRow: View {
         }
         .padding(.horizontal, 12)
         .frame(height: height)
-        .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(isHovered ? Crystal.rowHover : .clear))
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onFocus)
-        .background(
-            GeometryReader { geo in
-                Color.clear.preference(
-                    key: RowFramesKey.self,
-                    value: [session.id: geo.frame(in: .named(IslandModel.coordinateSpace))]
-                )
-            }
-        )
     }
 
     private var action: String {
-        switch session.status {
+        if session.wasInterrupted { return "Stopped by you" }
+        return switch session.status {
         case .needsPermission: session.pendingPermission ?? "Needs permission"
         case .question: session.question.map { "Asks: \($0)" } ?? "Asks a question"
         case .working: session.activity ?? "Thinking…"
@@ -503,6 +536,90 @@ private struct SessionRow: View {
         case .needsPermission, .question: Crystal.amberText
         case .working: Crystal.text
         default: Crystal.secondary
+        }
+    }
+}
+
+/// A session's subagents: a summary line, then one line per agent (running first).
+private struct SubagentList: View {
+    let subagents: [Subagent]
+    let now: Date
+    private static let maxLines = 4
+
+    var body: some View {
+        let running = subagents.filter { $0.state == .running }
+        let ordered = running + subagents.filter { $0.state != .running }.reversed()
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                HStack(spacing: 3) {
+                    ForEach(subagents.prefix(10)) { agent in
+                        Circle().fill(color(agent.state)).frame(width: 5, height: 5)
+                    }
+                }
+                Text(headline(running: running.count))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Crystal.tertiary)
+                    .textCase(.uppercase)
+                    .tracking(0.4)
+            }
+            ForEach(ordered.prefix(Self.maxLines)) { agent in
+                line(agent)
+            }
+            if ordered.count > Self.maxLines {
+                Text("+\(ordered.count - Self.maxLines) more")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Crystal.tertiary)
+            }
+        }
+    }
+
+    private func line(_ agent: Subagent) -> some View {
+        HStack(spacing: 8) {
+            Group {
+                switch agent.state {
+                case .running: Equalizer().scaleEffect(0.7)
+                case .done: Glyph(symbol: "checkmark", color: Crystal.amethyst, size: 11, weight: .bold)
+                case .stopped: Glyph(symbol: "stop.fill", color: Crystal.tertiary, size: 10)
+                }
+            }
+            .frame(width: 12, height: 12)
+            Text(agent.title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(agent.state == .running ? Crystal.body : Crystal.secondary)
+                .layoutPriority(1)
+            Text(detail(agent))
+                .font(.system(size: 12))
+                .foregroundStyle(agent.state == .done ? Crystal.amethystText : Crystal.tertiary)
+            Spacer(minLength: 6)
+            Text(Clock.format((agent.finishedAt ?? now).timeIntervalSince(agent.startedAt)))
+                .font(.system(size: 12).monospacedDigit())
+                .foregroundStyle(agent.state == .running ? Crystal.body : Crystal.tertiary)
+        }
+        .lineLimit(1)
+        .truncationMode(.tail)
+    }
+
+    private func headline(running: Int) -> String {
+        let total = subagents.count
+        let noun = total == 1 ? "agent" : "agents"
+        if running == total { return "\(total) \(noun) running" }
+        if running == 0 { return "\(total) \(noun) finished" }
+        return "\(running) of \(total) \(noun) running"
+    }
+
+    private func detail(_ agent: Subagent) -> String {
+        switch agent.state {
+        case .running: agent.activity ?? "Starting…"
+        case .done: agent.summary ?? "Done"
+        case .stopped: "Stopped"
+        }
+    }
+
+    private func color(_ state: Subagent.State) -> Color {
+        switch state {
+        case .running: Crystal.emerald
+        case .done: Crystal.amethyst
+        case .stopped: Crystal.tertiary
         }
     }
 }
