@@ -55,6 +55,7 @@ hdiutil detach -quiet "/Volumes/$VOL"
 rm -f "$DMG"
 hdiutil convert -quiet "$tmp/rw.dmg" -format UDZO -imagekey zlib-level=9 -o "$DMG"
 
-IDENTITY=$(security find-identity -v -p codesigning 2>/dev/null | awk -F'"' '/MacIsland Local Signing/ {print $2; exit}')
-[ -n "$IDENTITY" ] && codesign --force --sign "$IDENTITY" "$DMG" >/dev/null
+# Left unsigned on purpose: a DMG signed with a self-signed identity is assessed by Gatekeeper
+# and refused before it even mounts, while an unsigned one opens and the app inside gets the
+# usual one-time "Open Anyway".
 echo "Built $DMG"
