@@ -3,21 +3,35 @@
 # Idempotent: existing Mac Island entries are replaced, other hooks are left untouched.
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+# The hook script sits next to this one (scripts/ in the repo, Resources/ in the app bundle).
+SRC="$(cd "$(dirname "$0")" && pwd)/island-hook.sh"
 DIR="$HOME/.mac-island"
 HOOK="$DIR/hook.sh"
 SETTINGS="$HOME/.claude/settings.json"
 INSTALL=true
-[ "${1:-}" = "--uninstall" ] && INSTALL=false
+COPY=false
+for arg in "$@"; do
+  case "$arg" in
+    --uninstall) INSTALL=false ;;
+    # Copy rather than symlink: used by the app, whose bundle may move or be replaced.
+    --copy) COPY=true ;;
+  esac
+done
 
 EVENTS='["SessionStart","SessionEnd","UserPromptSubmit","PreToolUse","PostToolUse","PermissionRequest","Notification","Stop","SubagentStart","SubagentStop"]'
 TOOL_EVENTS='["PreToolUse","PostToolUse","PermissionRequest"]'
 
 if $INSTALL; then
   mkdir -p "$DIR"
-  chmod +x scripts/island-hook.sh
-  # Symlink, so edits to the hook in the repo take effect without reinstalling.
-  ln -sf "$PWD/scripts/island-hook.sh" "$HOOK"
+  if $COPY; then
+    rm -f "$HOOK"
+    cp "$SRC" "$HOOK"
+    chmod +x "$HOOK"
+  else
+    chmod +x "$SRC"
+    # Symlink, so edits to the hook in the repo take effect without reinstalling.
+    ln -sf "$SRC" "$HOOK"
+  fi
 fi
 
 mkdir -p "$(dirname "$SETTINGS")"

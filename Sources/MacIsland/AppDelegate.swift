@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = Self.makeMainMenu()
         controller = IslandController()
         controller?.show()
+        FirstRunSetup.run()
     }
 
     /// Clicking the Dock icon has no window to bring back; the island is always on screen.

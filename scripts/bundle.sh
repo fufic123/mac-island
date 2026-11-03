@@ -11,6 +11,9 @@ mkdir -p "$APP/Contents/MacOS"
 cp "$(swift build -c release --show-bin-path)/MacIsland" "$APP/Contents/MacOS/MacIsland"
 mkdir -p "$APP/Contents/Resources"
 cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+# The app connects itself to Claude Code on first launch with these.
+cp scripts/island-hook.sh scripts/install-hooks.sh "$APP/Contents/Resources/"
+chmod +x "$APP/Contents/Resources/"*.sh
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
