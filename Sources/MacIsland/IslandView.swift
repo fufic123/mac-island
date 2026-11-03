@@ -92,7 +92,15 @@ struct IslandView: View {
             : model.currentSize
         ZStack(alignment: .top) {
             if let gem {
-                Rim(gem: gem, radius: tracesNotch ? IslandModel.notchCornerRadius + line : radius)
+                let rimRadius = tracesNotch ? IslandModel.notchCornerRadius + line : radius
+                // Faint black halo under the line, so it stands out against any menu bar.
+                IslandRimShape(radius: rimRadius, inset: line / 2)
+                    .stroke(.black.opacity(0.55), lineWidth: line * 3.5)
+                    .blur(radius: 2)
+                    .frame(width: rimSize.width, height: rimSize.height)
+                    .opacity(model.mode == .panel ? 0 : 1)
+                    .transition(.opacity)
+                Rim(gem: gem, radius: rimRadius)
                     .frame(width: rimSize.width, height: rimSize.height)
                     .opacity(model.mode == .panel ? 0 : 1)
                     .transition(.opacity)
@@ -156,7 +164,7 @@ private struct Bubble<Content: View>: View {
         let tint = gem == .obsidian ? Color.white : gem.color
         content
             .frame(width: diameter, height: diameter)
-            .background(Circle().fill(tint.opacity(gem == .obsidian ? 0.08 : 0.16)))
+            .background(Circle().fill(.black))
             .overlay(Circle().strokeBorder(tint.opacity(gem == .obsidian ? 0.1 : 0.28), lineWidth: 1))
     }
 }
