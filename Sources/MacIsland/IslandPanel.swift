@@ -17,6 +17,8 @@ final class IslandPanel: NSPanel {
         level = .statusBar
         collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary, .ignoresCycle]
         isReleasedWhenClosed = false
+        // When the cursor is over the island itself, events go to us, not the global monitor.
+        acceptsMouseMovedEvents = true
     }
 
     override var canBecomeKey: Bool { false }

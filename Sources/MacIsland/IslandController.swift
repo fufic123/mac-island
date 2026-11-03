@@ -10,6 +10,7 @@ final class IslandController {
     private var monitors: [Any] = []
     private var collapseWork: DispatchWorkItem?
     private var hookServer: HookServer?
+    private var hoverTracker: HoverTracker?
 
     /// Extra slack around the collapsed notch so it's easy to hit with the cursor.
     private let hoverSlop: CGFloat = 8
@@ -21,6 +22,7 @@ final class IslandController {
         hosting.sizingOptions = []
         panel.contentView = hosting
         self.panel = panel
+        hoverTracker = HoverTracker(view: hosting) { [weak self] in self?.updateHover() }
 
         layout()
         panel.orderFrontRegardless()
@@ -87,21 +89,25 @@ final class IslandController {
         }
     }
 
-    /// Island rect in screen coordinates for the current state.
-    private func islandRect() -> NSRect? {
+    /// Hover hit zone in screen coordinates for the current state.
+    /// It always reaches past the top screen edge: a cursor pinned against the edge
+    /// reports y == maxY, which a plain rect would treat as outside.
+    private func hoverRect() -> NSRect? {
         guard let geometry else { return nil }
         let size = model.currentSize
-        let rect = NSRect(
-            x: geometry.screenFrame.midX - size.width / 2,
-            y: geometry.screenFrame.maxY - size.height,
-            width: size.width,
-            height: size.height
+        let slop = model.isExpanded ? 0 : hoverSlop
+        let top = geometry.screenFrame.maxY + hoverSlop
+        let bottom = geometry.screenFrame.maxY - size.height - slop
+        return NSRect(
+            x: geometry.screenFrame.midX - size.width / 2 - slop,
+            y: bottom,
+            width: size.width + slop * 2,
+            height: top - bottom
         )
-        return model.isExpanded ? rect : rect.insetBy(dx: -hoverSlop, dy: -hoverSlop)
     }
 
     private func updateHover() {
-        guard let rect = islandRect() else { return }
+        guard let rect = hoverRect() else { return }
         let inside = rect.contains(NSEvent.mouseLocation)
 
         if inside {
