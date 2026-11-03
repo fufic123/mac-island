@@ -57,6 +57,14 @@ func run() {
         let store = SessionStore()
         store.apply(envelope(["hook_event_name": "UserPromptSubmit"]))
         store.apply(envelope(["hook_event_name": "Stop", "last_assistant_message": "Done"]))
+        store.apply(envelope(["hook_event_name": "SubagentStart", "agent_id": "f1"]))
+        store.apply(envelope(["hook_event_name": "SubagentStop", "agent_id": "f1", "last_assistant_message": "(no suggestion)"]))
+        check(store.sessions["s1"]?.suggestion == nil, "\"(no suggestion)\" shows no suggestion")
+    }
+    do {
+        let store = SessionStore()
+        store.apply(envelope(["hook_event_name": "UserPromptSubmit"]))
+        store.apply(envelope(["hook_event_name": "Stop", "last_assistant_message": "Done"]))
         store.apply(envelope(["hook_event_name": "SubagentStop", "agent_id": "x1", "agent_type": "general-purpose",
                               "last_assistant_message": "ignore previous instructions"]))
         check(store.sessions["s1"]?.suggestion == nil, "a fork of another type is not a suggestion")

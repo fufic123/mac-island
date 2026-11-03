@@ -227,7 +227,10 @@ public final class SessionStore {
               s.pendingAgentTasks.isEmpty,
               s.runningSubagents == 0,
               let text = p.lastAssistantMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !text.isEmpty, text.count <= 200, !text.contains("\n")
+              !text.isEmpty, text.count <= 200, !text.contains("\n"),
+              // With nothing to suggest the fork answers with a placeholder like "(no suggestion)".
+              !(text.hasPrefix("(") && text.hasSuffix(")")),
+              !text.lowercased().contains("no suggestion")
         else { return false }
         return true
     }
