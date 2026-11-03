@@ -1,6 +1,7 @@
 import SwiftUI
 import IslandCore
 
+/// One session up close: Claude's last message in full and a field to answer it from the island.
 struct DetailPanel: View {
     let model: IslandModel
     let session: AgentSession

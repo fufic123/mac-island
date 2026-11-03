@@ -23,7 +23,9 @@ TOOL_EVENTS='["PreToolUse","PostToolUse","PermissionRequest"]'
 
 if $INSTALL; then
   mkdir -p "$DIR"
-  if $COPY; then
+  if $COPY && [ -L "$HOOK" ] && [ -e "$HOOK" ]; then
+    : # A developer checkout's symlink: keep it, so edits there still take effect.
+  elif $COPY; then
     rm -f "$HOOK"
     cp "$SRC" "$HOOK"
     chmod +x "$HOOK"

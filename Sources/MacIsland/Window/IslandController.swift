@@ -1,13 +1,12 @@
 import AppKit
 import IslandCore
 import SwiftUI
-import IslandCore
 
 /// Owns the panel, keeps it pinned over the notch, expands it on hover and peeks on events.
 @MainActor
 final class IslandController {
     private let store = SessionStore()
-    private let model: IslandModel
+    let model: IslandModel
     private var pruneTimer: Timer?
     private var interruptTimer: Timer?
     /// Set after an action closed the island under the cursor; cleared when the cursor leaves.
@@ -43,7 +42,8 @@ final class IslandController {
                 self?.dismissAfterAction()
             },
             onDecide: { store.decide(sessionId: $0, requestId: $1, decision: $2) },
-            onReply: { [weak self] in self?.sendReply(sessionId: $0, text: $1) }
+            onReply: { [weak self] in self?.sendReply(sessionId: $0, text: $1) },
+            onOnboarding: { [weak self] in self?.handleOnboarding($0) }
         ))
         hosting.sizingOptions = []
         panel.contentView = hosting
@@ -79,6 +79,7 @@ final class IslandController {
         }
         startMouseTracking()
         startHookServer()
+        startOnboarding()
     }
 
     private func startHookServer() {
@@ -88,14 +89,16 @@ final class IslandController {
         }
         let model = model
         pruneTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { _ in
-            MainActor.assumeIsolated {
+            MainActor.assumeIsolated { [weak self] in
                 store.prune()
                 model.clock = .now
+                self?.checkHooks()
             }
         }
         interruptTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
-            MainActor.assumeIsolated {
+            MainActor.assumeIsolated { [weak self] in
                 store.checkInterrupts()
+                self?.noticeFirstSession()
                 // A "Done" peek is moot once its session is busy again.
                 if case let .done(sessionId, _, _, _)? = model.peek?.kind,
                    let status = store.sessions[sessionId]?.status, status == .working || status.needsAttention {
@@ -143,6 +146,11 @@ final class IslandController {
         }
     }
 
+    /// Folds the island and keeps it shut until the cursor leaves.
+    func collapseUnderCursor() {
+        dismissAfterAction()
+    }
+
     /// After jumping to a terminal the island folds away and stays shut until the cursor leaves it.
     private func dismissAfterAction() {
         expandWork?.cancel()
@@ -159,7 +167,7 @@ final class IslandController {
 
     // MARK: Peek
 
-    private func showPeek(_ peek: Peek) {
+    func showPeek(_ peek: Peek) {
         peekWork?.cancel()
         model.peek = peek
         let work = DispatchWorkItem { [weak self] in
@@ -240,15 +248,16 @@ final class IslandController {
         } else {
             expandWork?.cancel()
             expandWork = nil
-            // Stay open while typing a reply, even if the cursor wanders off.
-            guard model.isExpanded, !model.isComposing, collapseWork == nil else { return }
+            // Stay open while typing a reply or on a first-run screen, even if the cursor wanders off.
+            guard model.isExpanded, !model.isComposing, !model.isPinnedOpen, collapseWork == nil else { return }
             let work = DispatchWorkItem { [weak self] in
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     self.collapseWork = nil
-                    guard !self.model.isComposing else { return }
+                    guard !self.model.isComposing, !self.model.isPinnedOpen else { return }
                     self.model.isExpanded = false
                     self.model.selectedSessionId = nil
+                    self.reshowConnectedPeek()
                 }
             }
             collapseWork = work

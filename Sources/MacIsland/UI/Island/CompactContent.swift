@@ -49,6 +49,8 @@ struct CompactContent: View {
             Equalizer().scaleEffect(0.85)
         case .amethyst:
             Glyph(symbol: "sparkle", color: Crystal.amethyst, size: 13)
+        case .ruby:
+            Glyph(symbol: "exclamationmark.triangle", color: Crystal.ruby, size: 12)
         case .obsidian:
             Glyph(symbol: "moon", color: Crystal.tertiary, size: 13, weight: .medium)
         }

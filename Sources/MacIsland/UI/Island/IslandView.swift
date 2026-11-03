@@ -6,6 +6,7 @@ struct IslandView: View {
     let onFocus: (AgentSession) -> Void
     let onDecide: (_ sessionId: String, _ requestId: UUID, _ decision: PermissionDecision) -> Void
     let onReply: (_ sessionId: String, _ text: String) -> Void
+    let onOnboarding: (OnboardingAction) -> Void
 
     var body: some View {
         let size = model.currentSize
@@ -51,7 +52,7 @@ struct IslandView: View {
         .animation(model.isExpanded ? Crystal.expand : Crystal.collapse, value: model.isExpanded)
         .animation(Crystal.expand, value: model.peek)
         .animation(Crystal.expand, value: model.panelBodyHeight)
-        .animation(Crystal.expand, value: model.hasSessions)
+        .animation(Crystal.expand, value: model.showsBar)
         .foregroundStyle(Crystal.text)
     }
 
@@ -62,17 +63,18 @@ struct IslandView: View {
     private var content: some View {
         switch model.mode {
         case .compact:
-            if model.hasSessions {
+            if model.showsBar {
                 CompactContent(model: model)
                     .transition(Self.fade)
             }
         case .peek:
             if let peek = model.peek {
-                PeekContent(peek: peek, headerHeight: model.notchHeight)
+                PeekContent(peek: peek, headerHeight: model.notchHeight, notchWidth: model.notchWidth)
                     .transition(Self.fade)
             }
         case .panel:
-            PanelContent(model: model, onFocus: onFocus, onDecide: onDecide, onReply: onReply)
+            PanelContent(model: model, onFocus: onFocus, onDecide: onDecide, onReply: onReply,
+                         onOnboarding: onOnboarding)
                 .transition(Self.fade)
         }
     }
@@ -82,7 +84,7 @@ struct IslandView: View {
     @ViewBuilder
     private func border(radius: CGFloat) -> some View {
         let gem: Gem? = switch model.mode {
-        case .compact: model.hasSessions ? model.stateGem : nil
+        case .compact: model.showsBar ? model.stateGem : nil
         case .peek: model.peek?.gem
         case .panel: model.stateGem
         }

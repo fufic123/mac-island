@@ -17,6 +17,8 @@ enum Crystal {
     static let amberText = Color(hex: 0xFFC46B)
     static let amethyst = Color(hex: 0xB18CFF)
     static let amethystText = Color(hex: 0xC9B0FF)
+    static let ruby = Color(hex: 0xFF3D6E)
+    static let rubyText = Color(hex: 0xFF7A9A)
 
     /// Code, branches and diffs only (SF Mono).
     static func mono(_ size: CGFloat) -> Font { .system(size: size, design: .monospaced) }
@@ -36,6 +38,8 @@ enum Gem: Equatable {
     case amber
     /// Done and updates.
     case amethyst
+    /// Lost the connection to Claude Code (hooks missing).
+    case ruby
 
     var color: Color {
         switch self {
@@ -43,6 +47,7 @@ enum Gem: Equatable {
         case .emerald: Crystal.emerald
         case .amber: Crystal.amber
         case .amethyst: Crystal.amethyst
+        case .ruby: Crystal.ruby
         }
     }
 
@@ -52,6 +57,7 @@ enum Gem: Equatable {
         case .emerald: Color(hex: 0xDCFFF0)
         case .amber: Color(hex: 0xFFF1D6)
         case .amethyst: Color(hex: 0xEFE7FF)
+        case .ruby: Color(hex: 0xFFD6E0)
         }
     }
 
@@ -59,7 +65,7 @@ enum Gem: Equatable {
     var period: Double {
         switch self {
         case .emerald, .obsidian: 2.6
-        case .amber: 1.5
+        case .amber, .ruby: 1.5
         case .amethyst: 3.6
         }
     }
@@ -73,6 +79,7 @@ enum Gem: Equatable {
         case .emerald: (0.4, 1)
         case .amber: (0.6, 1.5)
         case .amethyst: (0.55, 1.5)
+        case .ruby: (0.65, 1.5)
         }
     }
 

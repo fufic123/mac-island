@@ -1,12 +1,14 @@
 import SwiftUI
 import IslandCore
 
+/// The flow the island exists for: the question asked plainly, the whole command, Claude's
 /// reason, two equal buttons and a quiet third option.
 struct PermissionPanel: View {
     let session: AgentSession
     let queue: Int
     let now: Date
     let headerHeight: CGFloat
+    let notchWidth: CGFloat
     let onDecide: (PermissionDecision) -> Void
 
     var body: some View {
@@ -18,6 +20,8 @@ struct PermissionPanel: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Crystal.amberText)
                 }
+                .besideNotch(islandWidth: IslandModel.panelWidth, notchWidth: notchWidth,
+                             edgeInset: 20, alignment: .leading)
                 Spacer()
                 Text(Clock.format(now.timeIntervalSince(session.permissionRequestedAt ?? now)))
                     .font(.system(size: 13).monospacedDigit())
@@ -87,5 +91,3 @@ struct PermissionPanel: View {
         }
     }
 }
-
-/// One session up close: Claude's last message in full and a field to answer it from the island.

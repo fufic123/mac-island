@@ -6,18 +6,33 @@ struct PanelContent: View {
     let onFocus: (AgentSession) -> Void
     let onDecide: (_ sessionId: String, _ requestId: UUID, _ decision: PermissionDecision) -> Void
     let onReply: (_ sessionId: String, _ text: String) -> Void
+    let onOnboarding: (OnboardingAction) -> Void
 
     var body: some View {
+        switch model.onboarding {
+        case .installJQ:
+            InstallJQPanel(model: model, onAction: onOnboarding)
+        case .connect:
+            ConnectPanel(model: model, onAction: onOnboarding)
+        case .disconnected:
+            DisconnectedPanel(model: model, onAction: onOnboarding)
+        case .waiting, nil:
+            sessionPanels
+        }
+    }
+
+    private var sessionPanels: some View {
         let pending = model.store.pendingDecisions
         let selected = model.selectedSessionId.flatMap { model.store.sessions[$0] }
         // Refresh timers once a second.
-        TimelineView(.periodic(from: .now, by: 1)) { context in
+        return TimelineView(.periodic(from: .now, by: 1)) { context in
             if let request = pending.first, let requestId = request.permissionRequestId {
                 PermissionPanel(
                     session: request,
                     queue: pending.count,
                     now: context.date,
                     headerHeight: model.notchHeight,
+                    notchWidth: model.notchWidth,
                     onDecide: { onDecide(request.id, requestId, $0) }
                 )
             } else if let selected {

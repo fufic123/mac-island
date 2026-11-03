@@ -1,7 +1,6 @@
 import SwiftUI
 import IslandCore
 import os
-import IslandCore
 
 private let log = Logger(subsystem: "com.fufic123.macisland", category: "input")
 

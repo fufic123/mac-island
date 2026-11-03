@@ -5,6 +5,10 @@ import IslandCore
 struct PeekContent: View {
     let peek: Peek
     let headerHeight: CGFloat
+    let notchWidth: CGFloat
+
+    /// The header sits beside the notch, a little closer to the edges than the body.
+    private static let headerInset: CGFloat = 16
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,12 +18,12 @@ struct PeekContent: View {
                 Text(label)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(labelColor)
+                    .besideNotch(islandWidth: IslandModel.peekWidth, notchWidth: notchWidth,
+                                 edgeInset: Self.headerInset, alignment: .trailing)
             }
-            // Inset past the body's margin: up here the island meets the menu bar with square
-            // corners, and text close to that edge reads as cut off.
-            .padding(.horizontal, 8)
-            .padding(.top, 3)
+            .padding(.horizontal, Self.headerInset)
             .frame(height: headerHeight)
+            Group {
             if peek.isTall {
                 // Claude's closing line, up to two lines, like the design's "Update".
                 message
@@ -37,8 +41,9 @@ struct PeekContent: View {
                 }
                 .frame(height: IslandModel.peekRowHeight)
             }
+            }
+            .padding(.horizontal, 20)
         }
-        .padding(.horizontal, 20)
     }
 
     @ViewBuilder
@@ -50,6 +55,8 @@ struct PeekContent: View {
         case .allowed, .ruleAdded: Glyph(symbol: "checkmark", color: Crystal.emerald, weight: .bold)
         case .replied: Glyph(symbol: "arrow.up", color: Crystal.emerald, weight: .bold)
         case .denied: Glyph(symbol: "xmark", color: Crystal.secondary, size: 14, weight: .bold)
+        case .connected: Glyph(symbol: "checkmark", color: Crystal.text, weight: .bold)
+        case .firstSession: Equalizer()
         }
     }
 
@@ -62,6 +69,8 @@ struct PeekContent: View {
         case .allowed: "Allowed"
         case .denied: "Denied"
         case .ruleAdded: "Rule added"
+        case .connected: "Connected"
+        case .firstSession: "Started"
         }
     }
 
@@ -70,7 +79,8 @@ struct PeekContent: View {
         case .permission, .question: Crystal.amberText
         case .done: Crystal.amethystText
         case .allowed, .ruleAdded, .replied: Crystal.emerald
-        case .denied: Crystal.secondary
+        case .denied, .connected: Crystal.secondary
+        case .firstSession: Crystal.emerald
         }
     }
 
@@ -95,6 +105,12 @@ struct PeekContent: View {
             Text("Claude will look for another way").foregroundStyle(Crystal.secondary)
         case let .ruleAdded(rule, project):
             Text(rule).font(Crystal.mono(13.5)) + Text(" is allowed in \(project)").foregroundStyle(Crystal.secondary)
+        case .connected:
+            Text("Run ").foregroundStyle(Crystal.secondary) + Text("claude").font(Crystal.mono(13.5))
+                + Text(" in any terminal to begin").foregroundStyle(Crystal.secondary)
+        case let .firstSession(project):
+            Self.news(project, "started")
+                + Text("\nHover the notch any time to see your sessions").font(.system(size: 13)).foregroundStyle(Crystal.tertiary)
         }
     }
 

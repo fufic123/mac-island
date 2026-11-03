@@ -1,7 +1,6 @@
 import Observation
 import IslandCore
 import CoreGraphics
-import IslandCore
 import Foundation
 
 /// A short-lived expansion announcing an event, without hovering.
@@ -14,10 +13,18 @@ struct Peek: Equatable {
         case allowed(project: String, detail: String)
         case denied
         case ruleAdded(rule: String, project: String)
+        /// Onboarding: hooks connected, waiting for the first session.
+        case connected
+        /// Onboarding: the first session appeared; the one time hovering is suggested.
+        case firstSession(project: String)
     }
 
     let id = UUID()
     let kind: Kind
+
+    init(kind: Kind) {
+        self.kind = kind
+    }
 
     init(_ signal: IslandSignal) {
         switch signal {
@@ -41,6 +48,9 @@ struct Peek: Equatable {
         case .done: 60
         case .allowed, .denied: 1.2
         case .ruleAdded, .replied: 5
+        // Stays until the first session shows up.
+        case .connected: 24 * 3600
+        case .firstSession: 8
         }
     }
 
@@ -49,13 +59,15 @@ struct Peek: Equatable {
         case .permission, .question: .amber
         case .done: .amethyst
         case .allowed, .ruleAdded, .replied: .emerald
-        case .denied: .obsidian
+        case .denied, .connected: .obsidian
+        case .firstSession: .emerald
         }
     }
 
     /// A finished turn shows Claude's closing line, which takes up to two lines.
     var isTall: Bool {
         if case .done(_, _, _, let summary?) = kind { return !summary.isEmpty }
+        if case .firstSession = kind { return true }
         return false
     }
 
@@ -96,6 +108,15 @@ final class IslandModel {
     var replyDraft = ""
     /// The reply screen shows Claude's message cut to its first words until this is set.
     var showsFullMessage = false
+    /// First-run step shown in the island, if any.
+    var onboarding: OnboardingStep?
+    /// Installing the hooks is in progress.
+    var isConnecting = false
+    /// Why the last connect attempt failed.
+    var onboardingError: String?
+
+    /// The connect and jq screens stay open until answered, wherever the cursor goes.
+    var isPinnedOpen: Bool { onboarding == .installJQ || onboarding == .connect }
 
     init(store: SessionStore) {
         self.store = store
@@ -127,9 +148,12 @@ final class IslandModel {
 
     var hasSessions: Bool { !store.sessions.isEmpty }
 
-    /// With no sessions the island hides inside the notch.
+    /// The collapsed island shows beside the notch when there are sessions, or a lost connection.
+    var showsBar: Bool { hasSessions || onboarding == .disconnected }
+
+    /// With nothing to show the island hides inside the notch.
     var compactSize: CGSize {
-        hasSessions
+        showsBar
             ? CGSize(width: max(Self.compactWidth, notchWidth + 88), height: notchHeight + Self.notchRimWidth)
             : CGSize(width: notchWidth, height: notchHeight)
     }
@@ -177,6 +201,8 @@ final class IslandModel {
     /// Light of the collapsed island and open panel, most urgent first: amber while someone
     /// waits, emerald while anyone works, amethyst for a few minutes after a finish, then dark.
     var stateGem: Gem {
+        // Without hooks nothing else the island shows is current.
+        if onboarding == .disconnected { return .ruby }
         if store.needsAttention { return .amber }
         if store.isAnyWorking { return .emerald }
         if store.sessions.values.contains(where: { s in

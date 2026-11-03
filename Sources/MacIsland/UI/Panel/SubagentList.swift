@@ -84,5 +84,3 @@ struct SubagentList: View {
         }
     }
 }
-
-/// The flow the island exists for: the question asked plainly, the whole command, Claude's
