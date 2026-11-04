@@ -46,6 +46,22 @@ struct SessionsPanel: View {
                         ForEach(sessions) { row($0, height: 56, radius: 16) }
                             .padding(.top, 8)
                     }
+                    if let today = model.store.todayCost, today > 0 {
+                        HStack {
+                            Text("Total today")
+                            Spacer()
+                            Text(DetailPanel.formatCost(today)).monospacedDigit()
+                        }
+                        .font(.system(size: 12))
+                        .foregroundStyle(Crystal.tertiary)
+                        .help("All Claude Code conversations today at API prices")
+                        .padding(.horizontal, 12)
+                        .padding(.top, 10)
+                        .overlay(alignment: .top) {
+                            Rectangle().fill(Crystal.rowHover).frame(height: 1).padding(.horizontal, 12)
+                        }
+                        .padding(.top, 6)
+                    }
                 }
                 .padding(.horizontal, 12)
                 .padding(.bottom, 14)

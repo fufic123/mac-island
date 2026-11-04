@@ -36,35 +36,59 @@ public final class TranscriptCost: @unchecked Sendable {
 
     private func update(_ path: String) -> Double {
         var state = files[path] ?? FileState()
-        guard let handle = FileHandle(forReadingAtPath: path) else { return state.cost }
+        guard let read = Self.readAppended(path, from: state.offset) else { return state.cost }
+        if read.rewritten { state = FileState() }
+        state.offset = read.offset
+        for entry in Self.entries(in: read.data) where state.seen.insert(entry.key).inserted {
+            state.cost += entry.cost
+        }
+        files[path] = state
+        return state.cost
+    }
+
+    /// Whole lines appended to `path` since `offset` (a partially written last line waits for
+    /// the next call), and the offset after them. `rewritten` when the file shrank: start over.
+    static func readAppended(_ path: String, from offset: UInt64) -> (data: Data, offset: UInt64, rewritten: Bool)? {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
         defer { try? handle.close() }
-        guard let size = try? handle.seekToEnd() else { return state.cost }
-        if size < state.offset { state = FileState() }  // rewritten
-        guard size > state.offset else { return state.cost }
-        try? handle.seek(toOffset: state.offset)
+        guard let size = try? handle.seekToEnd() else { return nil }
+        let rewritten = size < offset
+        let start = rewritten ? 0 : offset
+        guard size > start else { return rewritten ? (Data(), 0, true) : nil }
+        try? handle.seek(toOffset: start)
         guard let data = try? handle.readToEnd(),
               let lastNewline = data.lastIndex(of: UInt8(ascii: "\n"))
-        else { return state.cost }
-        // Only whole lines; a partially written last line is read next time.
+        else { return nil }
         let complete = data[data.startIndex...lastNewline]
-        state.offset += UInt64(complete.count)
-        for line in complete.split(separator: UInt8(ascii: "\n")) {
+        return (Data(complete), start + UInt64(complete.count), rewritten)
+    }
+
+    struct Entry {
+        let key: String
+        let timestamp: String?
+        let cost: Double
+    }
+
+    /// Priced API responses in whole JSONL lines. One response is split into several lines (one
+    /// per content block) that repeat the same usage, so callers dedupe by `key`.
+    static func entries(in data: Data) -> [Entry] {
+        let marker = Data(#""type":"assistant""#.utf8)
+        var result: [Entry] = []
+        for line in data.split(separator: UInt8(ascii: "\n")) {
             // Cheap filter before JSON parsing: only assistant lines carry usage.
-            guard line.count > 20,
+            guard line.range(of: marker) != nil,
                   let obj = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any],
                   obj["type"] as? String == "assistant",
                   let message = obj["message"] as? [String: Any],
                   let usage = message["usage"] as? [String: Any],
                   let model = message["model"] as? String
             else { continue }
-            // One API response is split into several lines (one per content block) that repeat
-            // the same usage; count it once.
             let key = (message["id"] as? String ?? "") + "|" + (obj["requestId"] as? String ?? "")
-            guard key != "|", state.seen.insert(key).inserted else { continue }
-            state.cost += Self.price(model: model, usage: usage)
+            guard key != "|" else { continue }
+            result.append(Entry(key: key, timestamp: obj["timestamp"] as? String,
+                                cost: price(model: model, usage: usage)))
         }
-        files[path] = state
-        return state.cost
+        return result
     }
 
     /// USD per million tokens: input, output, cache read. Cache writes are 1.25x input (5 min)

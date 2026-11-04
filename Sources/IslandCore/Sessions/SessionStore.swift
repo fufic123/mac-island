@@ -31,6 +31,10 @@ public final class SessionStore {
     @ObservationIgnored private var transcriptChecked: [String: Date] = [:]
     @ObservationIgnored private let costMeter = TranscriptCost()
     @ObservationIgnored private var costRefreshRunning = false
+    @ObservationIgnored private let dailyCost = DailyCost()
+    @ObservationIgnored private var dailyCostCheckedAt: Date = .distantPast
+    /// All conversations' cost today at API prices.
+    public private(set) var todayCost: Double?
 
     /// Finished/idle sessions without a known pid are dropped after this long.
     public static let staleAfter: TimeInterval = 30 * 60
@@ -421,13 +425,18 @@ public final class SessionStore {
     public func refreshCosts() {
         guard !costRefreshRunning else { return }
         let targets = sessions.compactMap { id, s in s.transcriptPath.map { (id, $0) } }
-        guard !targets.isEmpty else { return }
+        // The daily total walks every project folder, so less often.
+        let daily: DailyCost? = Date.now.timeIntervalSince(dailyCostCheckedAt) > 10 ? dailyCost : nil
+        if daily != nil { dailyCostCheckedAt = .now }
+        guard !targets.isEmpty || daily != nil else { return }
         costRefreshRunning = true
         let meter = costMeter
         Task.detached(priority: .utility) {
             let costs = targets.map { ($0.0, meter.cost(transcriptPath: $0.1)) }
+            let today = daily?.total()
             await MainActor.run {
                 self.costRefreshRunning = false
+                if let today, today != self.todayCost { self.todayCost = today }
                 for (id, cost) in costs where self.sessions[id] != nil && self.sessions[id]?.cost != cost {
                     self.sessions[id]?.cost = cost
                 }
