@@ -32,6 +32,7 @@ struct SuggestionButton: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .pointingHand()
             Button(action: onEdit) {
                 Image(systemName: "pencil")
                     .font(.system(size: 13, weight: .semibold))
@@ -40,6 +41,7 @@ struct SuggestionButton: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .pointingHand()
             .help("Edit before sending")
         }
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Crystal.amethyst.opacity(0.1)))

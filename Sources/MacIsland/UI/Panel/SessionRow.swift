@@ -22,6 +22,7 @@ struct SessionRow: View {
         .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(isHovered ? Crystal.rowHover : .clear))
         .contentShape(Rectangle())
         .onTapGesture(perform: onFocus)
+        .pointingHand()
         .background(
             GeometryReader { geo in
                 Color.clear.preference(

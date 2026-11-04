@@ -34,6 +34,7 @@ struct DetailPanel: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .pointingHand()
                 Spacer()
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(time)
@@ -52,27 +53,34 @@ struct DetailPanel: View {
 
             MeasuredScroll {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(session.projectName)
-                        .font(.system(size: 20, weight: .semibold))
-                        .tracking(-0.4)
-                        .padding(.top, 16)
-                        .padding(.bottom, 8)
+                    // The title and Claude's message jump to the terminal like the button does.
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(session.projectName)
+                            .font(.system(size: 20, weight: .semibold))
+                            .tracking(-0.4)
+                            .padding(.top, 16)
+                            .padding(.bottom, 8)
 
-                    Text(message)
-                        .font(.system(size: 14))
-                        .lineSpacing(3)
-                        .foregroundStyle(Crystal.body)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                        // The message can echo untrusted content (web pages, files), so only web
-                        // links open; file:// and app URL schemes are dropped.
-                        .environment(\.openURL, OpenURLAction { url in
-                            ["http", "https"].contains(url.scheme?.lowercased() ?? "") ? .systemAction : .discarded
-                        })
+                        Text(message)
+                            .font(.system(size: 14))
+                            .lineSpacing(3)
+                            .foregroundStyle(Crystal.body)
+                            .fixedSize(horizontal: false, vertical: true)
+                            // The message can echo untrusted content (web pages, files), so only web
+                            // links open; file:// and app URL schemes are dropped.
+                            .environment(\.openURL, OpenURLAction { url in
+                                ["http", "https"].contains(url.scheme?.lowercased() ?? "") ? .systemAction : .discarded
+                            })
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .onTapGesture(perform: onFocus)
+                    .pointingHand()
 
                     if isShortened {
                         Button("Show full reply") { model.showsFullMessage = true }
                             .buttonStyle(.plain)
+                            .pointingHand()
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(Crystal.amethystText)
                             .padding(.top, 8)

@@ -82,6 +82,7 @@ struct PermissionPanel: View {
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .pointingHand()
                         .padding(.top, 10)
                     }
                 }

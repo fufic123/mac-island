@@ -85,6 +85,7 @@ struct InstallJQPanel: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .pointingHand()
                 .help("Copy")
             }
             .padding(.leading, 14)

@@ -76,5 +76,19 @@ struct CapsuleButton: View {
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .pointingHand()
+    }
+}
+
+extension View {
+    /// Pointing-hand cursor while hovered, so clickable things read as clickable. Set on every
+    /// move: the island is a non-activating panel and the cursor can be reset under it.
+    func pointingHand(_ enabled: Bool = true) -> some View {
+        onContinuousHover { phase in
+            switch phase {
+            case .active: (enabled ? NSCursor.pointingHand : NSCursor.arrow).set()
+            case .ended: NSCursor.arrow.set()
+            }
+        }
     }
 }
