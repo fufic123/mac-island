@@ -79,9 +79,19 @@ struct DetailPanel: View {
                     }
 
                     if session.canReply {
-                        TextField("Reply to Claude…", text: draft, axis: .vertical)
+                        // The system placeholder is near-black on this dark field, so draw our own.
+                        TextField("", text: draft, axis: .vertical)
                             .textFieldStyle(.plain)
                             .font(.system(size: 14))
+                            .foregroundStyle(Crystal.text)
+                            .background(alignment: .leading) {
+                                if model.replyDraft.isEmpty {
+                                    Text("Reply to Claude…")
+                                        .font(.system(size: 14))
+                                        .foregroundStyle(Crystal.tertiary)
+                                        .allowsHitTesting(false)
+                                }
+                            }
                             .lineLimit(1...5)
                             .focused($fieldFocused)
                             .onSubmit(send)
@@ -102,9 +112,13 @@ struct DetailPanel: View {
                     HStack(spacing: 10) {
                         CapsuleButton(title: "Open terminal", background: Crystal.button, foreground: Crystal.text, action: onFocus)
                         if session.canReply {
-                            CapsuleButton(title: "Send", background: Crystal.amethyst, foreground: Color(hex: 0x170B33), action: send)
-                                .opacity(canSend ? 1 : 0.45)
-                                .disabled(!canSend)
+                            CapsuleButton(
+                                title: "Send",
+                                background: canSend ? Crystal.amethyst : Crystal.button,
+                                foreground: canSend ? Color(hex: 0x170B33) : Crystal.tertiary,
+                                action: send
+                            )
+                            .disabled(!canSend)
                         }
                     }
                     .padding(.top, 16)
