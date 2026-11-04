@@ -25,6 +25,15 @@ func envelope(_ payload: [String: Any]) -> HookEnvelope {
 @MainActor
 func run() {
     do {
+        // After a restart the first event can come from a worktree subagent.
+        let store = SessionStore()
+        store.apply(envelope(["hook_event_name": "PreToolUse", "agent_id": "a9", "tool_name": "Bash",
+                              "cwd": "/tmp/demo/.claude/worktrees/agent-a9"]))
+        check(store.sessions["s1"]?.projectName == "demo", "worktree subagent's event names the main project")
+        store.apply(envelope(["hook_event_name": "Stop", "cwd": "/tmp/demo/.claude/worktrees/agent-a9"]))
+        check(store.sessions["s1"]?.cwd == "/tmp/demo", "worktree cwd never replaces the session's")
+    }
+    do {
         // Two lines of one response (same id) count once; a partial last line waits.
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cost-\(UUID().uuidString)")
         try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

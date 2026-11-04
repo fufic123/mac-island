@@ -90,8 +90,10 @@ public final class SessionStore {
         s.lastEventAt = now
         // A subagent may run in its own worktree; its cwd and branch aren't the session's, and
         // "Open terminal" must open the main conversation's folder.
-        let fromSubagent = p.agentId != nil
-        if let cwd = p.cwd, !fromSubagent || s.cwd == nil { s.cwd = cwd }
+        // A worktree subagent's cwd is "<project>/.claude/worktrees/agent-<id>", which also tells
+        // the main folder when the subagent's event is the first one seen (e.g. after a restart).
+        let fromSubagent = p.agentId != nil || p.cwd.map(Self.isSubagentWorktree) == true
+        if let cwd = p.cwd, !fromSubagent || s.cwd == nil { s.cwd = Self.mainFolder(of: cwd) }
         if let branch = envelope.gitBranch, !fromSubagent || s.gitBranch == nil {
             s.gitBranch = branch.isEmpty ? nil : branch
         }
@@ -372,7 +374,9 @@ public final class SessionStore {
         replyWaiters[id] = connection
         // The background hook can arrive before the regular Stop event.
         var s = sessions[id] ?? AgentSession(id: id, startedAt: .now, lastEventAt: .now)
-        if let cwd = envelope.payload.cwd, envelope.payload.agentId == nil || s.cwd == nil { s.cwd = cwd }
+        if let cwd = envelope.payload.cwd, (envelope.payload.agentId == nil && !Self.isSubagentWorktree(cwd)) || s.cwd == nil {
+            s.cwd = Self.mainFolder(of: cwd)
+        }
         if let message = envelope.payload.lastAssistantMessage, !message.isEmpty { s.lastMessage = message }
         if let pid = envelope.claudePid { s.pid = pid }
         s.canReply = true
@@ -442,5 +446,15 @@ public final class SessionStore {
                 }
             }
         }
+    }
+
+    private static let worktreeMarker = "/.claude/worktrees/agent-"
+
+    static func isSubagentWorktree(_ cwd: String) -> Bool { cwd.contains(worktreeMarker) }
+
+    /// The project folder a subagent's worktree belongs to; other paths unchanged.
+    static func mainFolder(of cwd: String) -> String {
+        guard let r = cwd.range(of: worktreeMarker) else { return cwd }
+        return String(cwd[..<r.lowerBound])
     }
 }
