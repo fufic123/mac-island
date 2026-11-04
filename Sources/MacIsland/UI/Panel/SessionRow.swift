@@ -65,9 +65,16 @@ struct SessionRow: View {
                         .background(RoundedRectangle(cornerRadius: 5).fill(Crystal.keyCap))
                 }
             } else {
-                Text(time)
-                    .font(.system(size: 15).monospacedDigit())
-                    .foregroundStyle(timeColor)
+                VStack(alignment: .trailing, spacing: 3) {
+                    Text(time)
+                        .font(.system(size: 15).monospacedDigit())
+                        .foregroundStyle(timeColor)
+                    if let cost = session.cost, cost > 0 {
+                        Text(DetailPanel.formatCost(cost))
+                            .font(.system(size: 12).monospacedDigit())
+                            .foregroundStyle(Crystal.tertiary)
+                    }
+                }
             }
         }
         .padding(.horizontal, 12)
