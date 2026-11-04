@@ -80,7 +80,7 @@ Requires a MacBook with a notch, macOS 14 or later, and `jq` (built into macOS 1
 Only the Xcode Command Line Tools are needed.
 
 ```sh
-./scripts/install-app.sh      # build, install to ~/Applications, start at login
+./scripts/install-app.sh      # build, install to /Applications, start at login
 ./scripts/install-hooks.sh    # connect Claude Code (symlinks the hook to this checkout)
 ```
 

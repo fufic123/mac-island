@@ -1,47 +1,28 @@
 #!/usr/bin/env bash
-# Builds Mac Island, installs it to ~/Applications and starts it at login via a LaunchAgent.
-# launchd also restarts it if it crashes. Re-run after changes to update and restart it.
-# --uninstall stops it and removes the app and the LaunchAgent.
+# Builds Mac Island, installs it to /Applications and opens it. The app registers itself as a
+# login item. Re-run after changes to update and restart it.
+# --uninstall quits it and removes the app.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 LABEL=com.fufic123.macisland
-APP="$HOME/Applications/MacIsland.app"
-PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-DOMAIN="gui/$(id -u)"
+APP=/Applications/MacIsland.app
 
-launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+# Clean up the older install style: a LaunchAgent plus a copy in ~/Applications.
+launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+rm -f "$HOME/Library/LaunchAgents/$LABEL.plist"
+rm -rf "$HOME/Applications/MacIsland.app"
+
 pkill -x MacIsland 2>/dev/null || true
 
 if [ "${1:-}" = "--uninstall" ]; then
-  rm -f "$PLIST"
   rm -rf "$APP"
-  echo "Removed Mac Island from login and ~/Applications."
+  echo "Removed Mac Island."
   exit 0
 fi
 
 ./scripts/bundle.sh
-mkdir -p "$HOME/Applications" "$(dirname "$PLIST")"
 rm -rf "$APP"
-# Outside ~/Documents, so launchd can start it at login without a TCC block.
 ditto build/MacIsland.app "$APP"
-
-cat > "$PLIST" <<PL
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key><string>$LABEL</string>
-    <key>ProgramArguments</key>
-    <array><string>$APP/Contents/MacOS/MacIsland</string></array>
-    <key>RunAtLoad</key><true/>
-    <!-- Restart after a crash, not after a normal quit. -->
-    <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
-    <key>LimitLoadToSessionType</key><string>Aqua</string>
-    <key>ProcessType</key><string>Interactive</string>
-</dict>
-</plist>
-PL
-
-launchctl bootstrap "$DOMAIN" "$PLIST"
-echo "Installed $APP; it starts at login and is running now."
+open "$APP"
+echo "Installed $APP and opened it; it starts at login."
