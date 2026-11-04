@@ -37,6 +37,14 @@ func run() {
         check(store.sessions["s1"]?.subagents.first?.task == "Fix the bug", "subagent launched before a restart shows up")
         store.apply(envelope(["hook_event_name": "PreToolUse", "agent_id": "fork", "tool_name": "Bash"]))
         check(store.sessions["s1"]?.subagents.count == 1, "a fork without metadata stays hidden")
+        // A quiet one (waiting on CI) is found without any event of its own.
+        try! #"{"agentType":"general-purpose","description":"Watch CI"}"#
+            .write(to: subagents.appendingPathComponent("agent-b2.meta.json"), atomically: true, encoding: .utf8)
+        try! #"{"type":"assistant","message":{"stop_reason":"tool_use"}}"#
+            .write(to: subagents.appendingPathComponent("agent-b2.jsonl"), atomically: true, encoding: .utf8)
+        store.discoverSubagents()
+        check(store.sessions["s1"]?.subagents.contains { $0.task == "Watch CI" && $0.state == .running } == true,
+              "a quiet running subagent is discovered")
     }
     do {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("sessions-\(UUID().uuidString).json")

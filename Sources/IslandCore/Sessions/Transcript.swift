@@ -40,4 +40,49 @@ public enum Transcript {
         else { return nil }
         return (description, obj["agentType"] as? String)
     }
+
+    public struct SubagentInfo: Sendable {
+        public let id: String
+        public let description: String
+        public let type: String?
+        /// When the subagent was launched (its metadata file's creation).
+        public let started: Date
+        public let modified: Date
+        /// Its last message ended the turn.
+        public let finished: Bool
+    }
+
+    /// Every Task-launched subagent of a session, from "<session>/subagents/agent-<id>.meta.json".
+    public static func subagents(sessionTranscript: String) -> [SubagentInfo] {
+        guard sessionTranscript.hasSuffix(".jsonl") else { return [] }
+        let dir = String(sessionTranscript.dropLast(".jsonl".count)) + "/subagents/"
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: dir)) ?? []
+        return names.compactMap { name -> SubagentInfo? in
+            guard name.hasPrefix("agent-"), name.hasSuffix(".meta.json") else { return nil }
+            let id = String(name.dropFirst("agent-".count).dropLast(".meta.json".count))
+            guard let meta = subagentMeta(sessionTranscript: sessionTranscript, agentId: id) else { return nil }
+            let log = dir + "agent-\(id).jsonl"
+            let modified = (try? FileManager.default.attributesOfItem(atPath: log))?[.modificationDate] as? Date ?? .distantPast
+            let started = (try? FileManager.default.attributesOfItem(atPath: dir + name))?[.creationDate] as? Date ?? modified
+            return SubagentInfo(id: id, description: meta.description, type: meta.type,
+                                started: started, modified: modified, finished: endsTurn(log))
+        }
+    }
+
+    /// Whether the last conversation message is an assistant message that ended its turn.
+    static func endsTurn(_ path: String) -> Bool {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return false }
+        defer { try? handle.close() }
+        guard let size = try? handle.seekToEnd(), size > 0 else { return false }
+        try? handle.seek(toOffset: size > 262_144 ? size - 262_144 : 0)
+        guard let data = try? handle.readToEnd() else { return false }
+        for line in data.split(separator: UInt8(ascii: "\n")).reversed() {
+            guard let obj = try? JSONSerialization.jsonObject(with: Data(line)) as? [String: Any],
+                  let type = obj["type"] as? String, type == "user" || type == "assistant"
+            else { continue }
+            let message = obj["message"] as? [String: Any]
+            return type == "assistant" && message?["stop_reason"] as? String == "end_turn"
+        }
+        return false
+    }
 }

@@ -103,6 +103,7 @@ final class IslandController {
             MainActor.assumeIsolated { [weak self] in
                 store.checkInterrupts()
                 store.refreshCosts()
+                store.discoverSubagents()
                 store.save(to: Self.sessionsFile)
                 self?.noticeFirstSession()
                 // A "Done" peek is moot once its session is busy again.

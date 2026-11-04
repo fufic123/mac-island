@@ -502,4 +502,35 @@ public final class SessionStore {
         log.info("restored \(saved.count) sessions")
         prune()
     }
+
+    // MARK: Subagent discovery
+
+    @ObservationIgnored private var subagentsCheckedAt: Date = .distantPast
+
+    /// Adds subagents that sent no hook event yet (launched before the app started, or quietly
+    /// waiting on CI), from Claude Code's subagent metadata. Running ones, and ones that finished
+    /// during the current turn.
+    public func discoverSubagents(now: Date = .now) {
+        guard now.timeIntervalSince(subagentsCheckedAt) > 5 else { return }
+        subagentsCheckedAt = now
+        for (id, s) in sessions {
+            guard let path = s.transcriptPath else { continue }
+            var updated = s
+            for info in Transcript.subagents(sessionTranscript: path)
+            where !updated.subagents.contains(where: { $0.id == info.id }) {
+                // A running one that went quiet for hours is a leftover of a killed session.
+                let running = !info.finished && now.timeIntervalSince(info.modified) < 3 * 3600
+                let thisTurn = info.modified > (s.turnStartedAt ?? s.startedAt)
+                guard running || (info.finished && thisTurn) else { continue }
+                updated.hiddenAgents.remove(info.id)
+                var agent = Subagent(id: info.id, type: info.type, task: info.description, startedAt: info.started)
+                if info.finished {
+                    agent.state = .done
+                    agent.finishedAt = info.modified
+                }
+                updated.subagents.append(agent)
+            }
+            if updated.subagents.count != s.subagents.count { sessions[id] = updated }
+        }
+    }
 }
