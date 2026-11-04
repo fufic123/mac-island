@@ -507,30 +507,34 @@ public final class SessionStore {
 
     @ObservationIgnored private var subagentsCheckedAt: Date = .distantPast
 
-    /// Adds subagents that sent no hook event yet (launched before the app started, or quietly
-    /// waiting on CI), from Claude Code's subagent metadata. Running ones, and ones that finished
-    /// during the current turn.
+    /// A running subagent writes its transcript on every step; this long without a write it was
+    /// killed with its session (Claude Code sends no SubagentStop then).
+    static let subagentQuietLimit: TimeInterval = 30 * 60
+
+    /// Syncs subagents with Claude Code's subagent metadata and transcripts: adds running ones that
+    /// sent no hook event yet (launched before the app started, or quietly waiting on CI), and
+    /// ends ones that finished or died without a SubagentStop.
     public func discoverSubagents(now: Date = .now) {
         guard now.timeIntervalSince(subagentsCheckedAt) > 5 else { return }
         subagentsCheckedAt = now
         for (id, s) in sessions {
             guard let path = s.transcriptPath else { continue }
             var updated = s
-            for info in Transcript.subagents(sessionTranscript: path)
-            where !updated.subagents.contains(where: { $0.id == info.id }) {
-                // A running one that went quiet for hours is a leftover of a killed session.
-                let running = !info.finished && now.timeIntervalSince(info.modified) < 3 * 3600
-                let thisTurn = info.modified > (s.turnStartedAt ?? s.startedAt)
-                guard running || (info.finished && thisTurn) else { continue }
-                updated.hiddenAgents.remove(info.id)
-                var agent = Subagent(id: info.id, type: info.type, task: info.description, startedAt: info.started)
-                if info.finished {
-                    agent.state = .done
-                    agent.finishedAt = info.modified
+            for info in Transcript.subagents(sessionTranscript: path) {
+                let alive = !info.finished && now.timeIntervalSince(info.modified) < Self.subagentQuietLimit
+                if let i = updated.subagents.firstIndex(where: { $0.id == info.id }) {
+                    guard updated.subagents[i].state == .running, !alive else { continue }
+                    updated.subagents[i].state = info.finished ? .done : .stopped
+                    updated.subagents[i].activity = nil
+                    updated.subagents[i].finishedAt = info.modified
+                } else if alive {
+                    updated.hiddenAgents.remove(info.id)
+                    updated.subagents.append(Subagent(id: info.id, type: info.type, task: info.description, startedAt: info.started))
                 }
-                updated.subagents.append(agent)
             }
-            if updated.subagents.count != s.subagents.count { sessions[id] = updated }
+            if updated.subagents.map(\.state) != s.subagents.map(\.state) || updated.subagents.count != s.subagents.count {
+                sessions[id] = updated
+            }
         }
     }
 }

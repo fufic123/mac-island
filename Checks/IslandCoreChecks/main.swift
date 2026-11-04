@@ -45,6 +45,10 @@ func run() {
         store.discoverSubagents()
         check(store.sessions["s1"]?.subagents.contains { $0.task == "Watch CI" && $0.state == .running } == true,
               "a quiet running subagent is discovered")
+        // Its session was killed: no write for over half an hour ends it.
+        store.discoverSubagents(now: Date.now.addingTimeInterval(31 * 60))
+        check(store.sessions["s1"]?.subagents.first { $0.task == "Watch CI" }?.state == .stopped,
+              "a subagent silent for half an hour is no longer running")
     }
     do {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("sessions-\(UUID().uuidString).json")

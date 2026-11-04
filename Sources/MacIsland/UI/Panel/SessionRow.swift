@@ -12,8 +12,10 @@ struct SessionRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             mainLine
-            if !session.subagents.isEmpty {
-                SubagentList(subagents: session.subagents, now: now)
+            // Only the ones still working; finished subagents drop out of the list.
+            let running = session.subagents.filter { $0.state == .running }
+            if !running.isEmpty {
+                SubagentList(subagents: running, now: now)
                     .padding(.leading, 12 + 18 + 14)
                     .padding(.trailing, 12)
                     .padding(.bottom, 10)
