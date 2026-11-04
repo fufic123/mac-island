@@ -82,8 +82,13 @@ public final class SessionStore {
         // Sessions started before the app launched show up on their first event.
         var s = sessions[p.sessionId] ?? AgentSession(id: p.sessionId, startedAt: now, lastEventAt: now)
         s.lastEventAt = now
-        if let cwd = p.cwd { s.cwd = cwd }
-        if let branch = envelope.gitBranch { s.gitBranch = branch.isEmpty ? nil : branch }
+        // A subagent may run in its own worktree; its cwd and branch aren't the session's, and
+        // "Open terminal" must open the main conversation's folder.
+        let fromSubagent = p.agentId != nil
+        if let cwd = p.cwd, !fromSubagent || s.cwd == nil { s.cwd = cwd }
+        if let branch = envelope.gitBranch, !fromSubagent || s.gitBranch == nil {
+            s.gitBranch = branch.isEmpty ? nil : branch
+        }
         if let term = envelope.termProgram, !term.isEmpty { s.termProgram = term }
         if let tty = envelope.tty, !tty.isEmpty { s.tty = tty }
         if let pid = envelope.claudePid { s.pid = pid }
@@ -361,7 +366,7 @@ public final class SessionStore {
         replyWaiters[id] = connection
         // The background hook can arrive before the regular Stop event.
         var s = sessions[id] ?? AgentSession(id: id, startedAt: .now, lastEventAt: .now)
-        if let cwd = envelope.payload.cwd { s.cwd = cwd }
+        if let cwd = envelope.payload.cwd, envelope.payload.agentId == nil || s.cwd == nil { s.cwd = cwd }
         if let message = envelope.payload.lastAssistantMessage, !message.isEmpty { s.lastMessage = message }
         if let pid = envelope.claudePid { s.pid = pid }
         s.canReply = true
