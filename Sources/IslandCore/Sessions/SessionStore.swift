@@ -29,6 +29,8 @@ public final class SessionStore {
     @ObservationIgnored private var lastDecisionAt: Date = .distantPast
     /// Transcript modification date last looked at, per session.
     @ObservationIgnored private var transcriptChecked: [String: Date] = [:]
+    @ObservationIgnored private let costMeter = TranscriptCost()
+    @ObservationIgnored private var costRefreshRunning = false
 
     /// Finished/idle sessions without a known pid are dropped after this long.
     public static let staleAfter: TimeInterval = 30 * 60
@@ -406,10 +408,29 @@ public final class SessionStore {
                 dead = s.status >= .done && now.timeIntervalSince(s.lastEventAt) > Self.staleAfter
             }
             if dead {
+                if let path = s.transcriptPath { costMeter.forget(transcriptPath: path) }
                 releaseResponder(for: id)
                 releaseReplyWaiter(for: id)
                 sessions[id] = nil
                 transcriptChecked[id] = nil
+            }
+        }
+    }
+
+    /// Recomputes each session's cost from its transcripts off the main thread.
+    public func refreshCosts() {
+        guard !costRefreshRunning else { return }
+        let targets = sessions.compactMap { id, s in s.transcriptPath.map { (id, $0) } }
+        guard !targets.isEmpty else { return }
+        costRefreshRunning = true
+        let meter = costMeter
+        Task.detached(priority: .utility) {
+            let costs = targets.map { ($0.0, meter.cost(transcriptPath: $0.1)) }
+            await MainActor.run {
+                self.costRefreshRunning = false
+                for (id, cost) in costs where self.sessions[id] != nil && self.sessions[id]?.cost != cost {
+                    self.sessions[id]?.cost = cost
+                }
             }
         }
     }

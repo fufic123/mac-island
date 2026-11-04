@@ -75,6 +75,8 @@ public struct AgentSession: Identifiable, Sendable {
     public var canReply = false
     /// Where Claude writes the conversation (under ~/.claude, readable without TCC prompts).
     public var transcriptPath: String?
+    /// What the session has cost so far at API prices, subagents included.
+    public var cost: Double?
     /// The user stopped the turn with Esc; Claude sends no Stop event for that.
     public var wasInterrupted = false
 

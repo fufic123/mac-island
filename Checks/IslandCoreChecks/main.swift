@@ -25,6 +25,18 @@ func envelope(_ payload: [String: Any]) -> HookEnvelope {
 @MainActor
 func run() {
     do {
+        // Two lines of one response (same id) count once; a partial last line waits.
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("cost-\(UUID().uuidString)")
+        try! FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let path = dir.appendingPathComponent("s.jsonl").path
+        let line = #"{"type":"assistant","requestId":"r1","message":{"id":"m1","model":"claude-opus-5-5","usage":{"input_tokens":1000000,"output_tokens":100000,"cache_read_input_tokens":1000000,"cache_creation_input_tokens":1000000,"cache_creation":{"ephemeral_1h_input_tokens":1000000,"ephemeral_5m_input_tokens":0}}}}"#
+        try! (line + "\n" + line + "\n" + "{\"type\":\"assi").write(toFile: path, atomically: true, encoding: .utf8)
+        let meter = TranscriptCost()
+        // $4 input + $2 output + $0.20 read + $8 1h write
+        check(abs(meter.cost(transcriptPath: path) - 14.2) < 0.0001, "transcript cost counts a response once")
+        check(abs(meter.cost(transcriptPath: path) - 14.2) < 0.0001, "re-reading adds nothing")
+    }
+    do {
         let store = SessionStore()
         store.apply(envelope(["hook_event_name": "UserPromptSubmit"]))
         check(store.sessions["s1"]?.status == .working, "prompt starts working")

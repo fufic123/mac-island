@@ -98,6 +98,7 @@ final class IslandController {
         interruptTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
             MainActor.assumeIsolated { [weak self] in
                 store.checkInterrupts()
+                store.refreshCosts()
                 self?.noticeFirstSession()
                 // A "Done" peek is moot once its session is busy again.
                 if case let .done(sessionId, _, _, _)? = model.peek?.kind,

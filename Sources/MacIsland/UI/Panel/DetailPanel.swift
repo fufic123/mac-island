@@ -35,9 +35,17 @@ struct DetailPanel: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
-                Text(time)
-                    .font(.system(size: 13).monospacedDigit())
-                    .foregroundStyle(Crystal.secondary)
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(time)
+                        .font(.system(size: 13).monospacedDigit())
+                        .foregroundStyle(Crystal.secondary)
+                    if let cost = session.cost, cost > 0 {
+                        Text(Self.formatCost(cost))
+                            .font(.system(size: 11).monospacedDigit())
+                            .foregroundStyle(Crystal.tertiary)
+                            .help("What this conversation has cost so far at API prices")
+                    }
+                }
             }
             .frame(height: model.notchHeight)
             .padding(.horizontal, 20)
@@ -182,6 +190,10 @@ struct DetailPanel: View {
         case .needsPermission, .question: Crystal.amberText
         case .waitingForInput, .idle: Crystal.secondary
         }
+    }
+
+    static func formatCost(_ usd: Double) -> String {
+        usd < 0.01 ? "<$0.01" : String(format: usd < 100 ? "$%.2f" : "$%.0f", usd)
     }
 
     private var time: String {
