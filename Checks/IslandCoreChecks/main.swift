@@ -25,6 +25,20 @@ func envelope(_ payload: [String: Any]) -> HookEnvelope {
 @MainActor
 func run() {
     do {
+        // A subagent launched before the app saw its Task call is found by its metadata.
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("meta-\(UUID().uuidString)")
+        let subagents = dir.appendingPathComponent("s1/subagents")
+        try! FileManager.default.createDirectory(at: subagents, withIntermediateDirectories: true)
+        try! #"{"agentType":"general-purpose","description":"Fix the bug"}"#
+            .write(to: subagents.appendingPathComponent("agent-b1.meta.json"), atomically: true, encoding: .utf8)
+        let store = SessionStore()
+        store.apply(envelope(["hook_event_name": "PreToolUse", "agent_id": "b1", "agent_type": "general-purpose",
+                              "tool_name": "Bash", "transcript_path": subagents.appendingPathComponent("agent-b1.jsonl").path]))
+        check(store.sessions["s1"]?.subagents.first?.task == "Fix the bug", "subagent launched before a restart shows up")
+        store.apply(envelope(["hook_event_name": "PreToolUse", "agent_id": "fork", "tool_name": "Bash"]))
+        check(store.sessions["s1"]?.subagents.count == 1, "a fork without metadata stays hidden")
+    }
+    do {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("sessions-\(UUID().uuidString).json")
         let store = SessionStore()
         store.apply(envelope(["hook_event_name": "UserPromptSubmit"]))

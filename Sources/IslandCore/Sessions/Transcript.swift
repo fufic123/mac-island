@@ -28,4 +28,16 @@ public enum Transcript {
         }
         return false
     }
+
+    /// Claude Code's metadata for a subagent launched by the Task / Agent tool:
+    /// "<session>/subagents/agent-<id>.meta.json" next to "<session>.jsonl".
+    public static func subagentMeta(sessionTranscript: String?, agentId: String) -> (description: String, type: String?)? {
+        guard let path = sessionTranscript, path.hasSuffix(".jsonl") else { return nil }
+        let meta = String(path.dropLast(".jsonl".count)) + "/subagents/agent-\(agentId).meta.json"
+        guard let data = FileManager.default.contents(atPath: meta),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let description = obj["description"] as? String, !description.isEmpty
+        else { return nil }
+        return (description, obj["agentType"] as? String)
+    }
 }

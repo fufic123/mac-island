@@ -101,6 +101,11 @@ public final class SessionStore {
         if let tty = envelope.tty, !tty.isEmpty { s.tty = tty }
         if let pid = envelope.claudePid { s.pid = pid }
         if let path = p.transcriptPath, p.agentId == nil { s.transcriptPath = path }
+        // A subagent's event can be the first seen (after a restart); its transcript sits in
+        // "<session>/subagents/", next to the session's own "<session>.jsonl".
+        if s.transcriptPath == nil, let path = p.transcriptPath {
+            s.transcriptPath = path.range(of: "/subagents/").map { String(path[..<$0.lowerBound]) + ".jsonl" } ?? path
+        }
 
         // Tool calls inside a subagent update that subagent, not the session's own line.
         if let agentId = p.agentId, ["PreToolUse", "PostToolUse"].contains(p.hookEventName),
@@ -189,6 +194,10 @@ public final class SessionStore {
             if let id = p.agentId { _ = subagentIndex(&s, id: id, type: p.agentType, now: now) }
         case "SubagentStop":
             log.info("subagent stop type=\(p.agentType ?? "-", privacy: .public)")
+            if let id = p.agentId, !s.subagents.contains(where: { $0.id == id }), !s.hiddenAgents.contains(id),
+               Transcript.subagentMeta(sessionTranscript: s.transcriptPath, agentId: id) != nil {
+                _ = subagentIndex(&s, id: id, type: p.agentType, now: now)
+            }
             if let id = p.agentId, s.hiddenAgents.contains(id) || !s.subagents.contains(where: { $0.id == id }) {
                 // An internal fork, not shown as a subagent. Its text becomes a one-click reply sent
                 // as the user, so only the prompt-suggestion fork qualifies (see isPromptSuggestion).
@@ -257,6 +266,12 @@ public final class SessionStore {
         }
         if s.hiddenAgents.contains(id) { return nil }
         guard let match = s.pendingAgentTasks.firstIndex(where: { $0.type == nil || $0.type == type }) else {
+            // Launched before this app saw the Task call (e.g. it was restarted): Claude Code's
+            // metadata for a Task-launched subagent carries its description; forks have none.
+            if let meta = Transcript.subagentMeta(sessionTranscript: s.transcriptPath, agentId: id) {
+                s.subagents.append(Subagent(id: id, type: type ?? meta.type, task: meta.description, startedAt: now))
+                return s.subagents.count - 1
+            }
             s.hiddenAgents.insert(id)
             return nil
         }
@@ -480,6 +495,8 @@ public final class SessionStore {
             // Waiting hooks belonged to the old process; the terminal still has the prompt.
             s.awaitingDecision = false
             s.canReply = false
+            // Re-checked against the subagents' metadata on their next event.
+            s.hiddenAgents = []
             sessions[s.id] = s
         }
         log.info("restored \(saved.count) sessions")
