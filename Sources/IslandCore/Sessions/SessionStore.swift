@@ -143,7 +143,7 @@ public final class SessionStore {
             s.status = .working
             s.activity = ToolDescriber.describe(tool: p.toolName, input: p.toolInput)
             if p.toolName == "Task" || p.toolName == "Agent" {
-                s.pendingAgentTasks.append((p.toolInput?.description, p.toolInput?.subagentType))
+                s.pendingAgentTasks.append(PendingAgentTask(task: p.toolInput?.description, type: p.toolInput?.subagentType))
             }
             if s.turnStartedAt == nil { s.turnStartedAt = now }
             s.finishedAt = nil
@@ -456,5 +456,33 @@ public final class SessionStore {
     static func mainFolder(of cwd: String) -> String {
         guard let r = cwd.range(of: worktreeMarker) else { return cwd }
         return String(cwd[..<r.lowerBound])
+    }
+
+    // MARK: Persistence
+    // Sessions live only in memory and hooks don't replay, so a restart (an update, a crash)
+    // would forget every open conversation until it next does something. Saved after changes,
+    // restored on launch; dead ones go on the next prune.
+
+    @ObservationIgnored private var lastSaved: Data?
+
+    public func save(to url: URL) {
+        guard let data = try? JSONEncoder().encode(Array(sessions.values)), data != lastSaved else { return }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if (try? data.write(to: url, options: .atomic)) != nil { lastSaved = data }
+    }
+
+    public func restore(from url: URL) {
+        guard let data = try? Data(contentsOf: url),
+              let saved = try? JSONDecoder().decode([AgentSession].self, from: data)
+        else { return }
+        lastSaved = data
+        for var s in saved where sessions[s.id] == nil {
+            // Waiting hooks belonged to the old process; the terminal still has the prompt.
+            s.awaitingDecision = false
+            s.canReply = false
+            sessions[s.id] = s
+        }
+        log.info("restored \(saved.count) sessions")
+        prune()
     }
 }

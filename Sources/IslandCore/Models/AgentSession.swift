@@ -1,6 +1,6 @@
 import Foundation
 
-public enum SessionStatus: Int, Comparable, Sendable {
+public enum SessionStatus: Int, Comparable, Sendable, Codable {
     // Raw value is the sort priority: things that need the user come first.
     case needsPermission = 0
     case question
@@ -39,8 +39,8 @@ public enum SessionGroup: Int, CaseIterable, Sendable {
 }
 
 /// A subagent launched by a session's Task / Agent tool.
-public struct Subagent: Identifiable, Sendable {
-    public enum State: Sendable { case running, done, stopped }
+public struct Subagent: Identifiable, Sendable, Codable {
+    public enum State: String, Sendable, Codable { case running, done, stopped }
 
     public let id: String
     public var type: String?
@@ -57,7 +57,13 @@ public struct Subagent: Identifiable, Sendable {
     public var title: String { task ?? type.map { $0 == "general-purpose" ? "Agent" : $0 } ?? "Agent" }
 }
 
-public struct AgentSession: Identifiable, Sendable {
+/// A launched Task call not yet matched to its SubagentStart.
+public struct PendingAgentTask: Sendable, Codable {
+    public var task: String?
+    public var type: String?
+}
+
+public struct AgentSession: Identifiable, Sendable, Codable {
     public let id: String
     public var cwd: String?
     public var gitBranch: String?
@@ -83,7 +89,7 @@ public struct AgentSession: Identifiable, Sendable {
     /// Subagents of the current turn, in launch order.
     public var subagents: [Subagent] = []
     /// Descriptions of launched Task calls not yet matched to a SubagentStart.
-    public var pendingAgentTasks: [(task: String?, type: String?)] = []
+    public var pendingAgentTasks: [PendingAgentTask] = []
     public var runningSubagents: Int { subagents.filter { $0.state == .running }.count }
     /// Claude Code's internal forks (prompt suggestion and the like): started without a Task call,
     /// so not shown as subagents.

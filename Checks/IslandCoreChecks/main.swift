@@ -25,6 +25,18 @@ func envelope(_ payload: [String: Any]) -> HookEnvelope {
 @MainActor
 func run() {
     do {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("sessions-\(UUID().uuidString).json")
+        let store = SessionStore()
+        store.apply(envelope(["hook_event_name": "UserPromptSubmit"]))
+        store.apply(envelope(["hook_event_name": "PreToolUse", "tool_name": "Agent",
+                              "tool_input": ["description": "Find routes", "subagent_type": "Explore"]]))
+        store.apply(envelope(["hook_event_name": "SubagentStart", "agent_id": "a1", "agent_type": "Explore"]))
+        store.save(to: url)
+        let restored = SessionStore()
+        restored.restore(from: url)
+        check(restored.sessions["s1"]?.subagents.count == 1, "sessions and subagents survive a restart")
+    }
+    do {
         // After a restart the first event can come from a worktree subagent.
         let store = SessionStore()
         store.apply(envelope(["hook_event_name": "PreToolUse", "agent_id": "a9", "tool_name": "Bash",

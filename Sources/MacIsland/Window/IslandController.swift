@@ -82,8 +82,12 @@ final class IslandController {
         startOnboarding()
     }
 
+    private static let sessionsFile = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("MacIsland/sessions.json")
+
     private func startHookServer() {
         let store = store
+        store.restore(from: Self.sessionsFile)
         let server = HookServer { envelope, reply in
             Task { @MainActor in store.apply(envelope, reply: reply) }
         }
@@ -99,6 +103,7 @@ final class IslandController {
             MainActor.assumeIsolated { [weak self] in
                 store.checkInterrupts()
                 store.refreshCosts()
+                store.save(to: Self.sessionsFile)
                 self?.noticeFirstSession()
                 // A "Done" peek is moot once its session is busy again.
                 if case let .done(sessionId, _, _, _)? = model.peek?.kind,
