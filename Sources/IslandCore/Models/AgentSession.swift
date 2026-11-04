@@ -121,6 +121,11 @@ public struct AgentSession: Identifiable, Sendable {
         status != .working && !status.needsAttention && (canReply || lastMessage != nil)
     }
 
+    /// Clock shown while nothing runs: the last turn's length, frozen.
+    public var stoppedTime: TimeInterval {
+        lastTurnDuration ?? lastEventAt.timeIntervalSince(startedAt)
+    }
+
     public var projectName: String {
         cwd.map { ($0 as NSString).lastPathComponent } ?? "Unknown"
     }

@@ -198,9 +198,10 @@ struct DetailPanel: View {
 
     private var time: String {
         switch session.status {
-        case .done: Clock.format(session.lastTurnDuration ?? 0)
         case .working: Clock.format(now.timeIntervalSince(session.turnStartedAt ?? session.startedAt))
-        default: Clock.format(now.timeIntervalSince(session.startedAt))
+        case .needsPermission, .question:
+            Clock.format(now.timeIntervalSince(session.permissionRequestedAt ?? session.lastEventAt))
+        case .done, .waitingForInput, .idle: Clock.format(session.stoppedTime)
         }
     }
 }

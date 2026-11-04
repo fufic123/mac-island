@@ -109,10 +109,9 @@ struct SessionRow: View {
             Clock.format(now.timeIntervalSince(session.permissionRequestedAt ?? session.lastEventAt))
         case .working:
             Clock.format(now.timeIntervalSince(session.turnStartedAt ?? session.startedAt))
-        case .done:
-            Clock.format(session.lastTurnDuration ?? 0)
-        case .waitingForInput, .idle:
-            Clock.format(now.timeIntervalSince(session.startedAt))
+        case .done, .waitingForInput, .idle:
+            // Nothing is running, so the clock stands still on the last turn's length.
+            Clock.format(session.stoppedTime)
         }
     }
 
