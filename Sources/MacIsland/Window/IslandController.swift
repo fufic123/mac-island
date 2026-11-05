@@ -106,6 +106,8 @@ final class IslandController {
                 store.discoverSubagents()
                 store.save(to: Self.sessionsFile)
                 self?.noticeFirstSession()
+                // The island can grow or shrink under a cursor that isn't moving.
+                self?.updateHover()
                 // A "Done" peek is moot once its session is busy again.
                 if case let .done(sessionId, _, _, _)? = model.peek?.kind,
                    let status = store.sessions[sessionId]?.status, status == .working || status.needsAttention {
@@ -223,10 +225,27 @@ final class IslandController {
         )
     }
 
+    /// The window is sized for the largest island; outside the island it's shown at, clicks
+    /// must reach the app underneath. Relying on transparent pixels isn't enough (the blurred
+    /// shadow and layers keep some alpha), so the window ignores the mouse there.
+    private func updateClickThrough(_ mouse: NSPoint) {
+        guard let panel, let geometry else { return }
+        let size = model.currentSize
+        let island = NSRect(
+            x: geometry.screenFrame.midX - size.width / 2,
+            y: geometry.screenFrame.maxY - size.height,
+            width: size.width,
+            height: size.height + hoverSlop
+        )
+        let ignore = !island.contains(mouse)
+        if panel.ignoresMouseEvents != ignore { panel.ignoresMouseEvents = ignore }
+    }
+
     private func updateHover() {
         guard let rect = hoverRect() else { return }
         let mouse = NSEvent.mouseLocation
         let inside = rect.contains(mouse)
+        updateClickThrough(mouse)
         updatePointer(mouse, inside: inside)
         if holdClosedUntilExit {
             guard !inside else { return }
