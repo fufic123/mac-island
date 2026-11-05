@@ -24,7 +24,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key><string>com.fufic123.macisland</string>
     <key>CFBundleExecutable</key><string>MacIsland</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>0.3.13</string>
+    <key>CFBundleShortVersionString</key><string>0.3.14</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundleDisplayName</key><string>Mac Island</string>

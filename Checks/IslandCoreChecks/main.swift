@@ -175,5 +175,16 @@ func run() {
 }
 
 MainActor.assumeIsolated { run() }
+
+do {
+    // A reply hook that dies (Claude's hook timeout) is noticed, so no reply is sent into the void.
+    var fds: [Int32] = [0, 0]
+    socketpair(AF_UNIX, SOCK_STREAM, 0, &fds)
+    let connection = HookConnection(fd: fds[0])
+    let closed = DispatchSemaphore(value: 0)
+    connection.onPeerClose { closed.signal() }
+    close(fds[1])
+    check(closed.wait(timeout: .now() + 2) == .success, "a reply hook that went away is noticed")
+}
 print(failures == 0 ? "All checks passed." : "\(failures) check(s) failed.")
 exit(failures == 0 ? 0 : 1)

@@ -12,6 +12,20 @@ enum ClaudeHooks {
         return text.contains(".mac-island/hook.sh")
     }
 
+    /// The hooks were installed by an older version: the reply hook lacks its long timeout, so
+    /// Claude kills it after 10 minutes and replies typed later never arrive.
+    static var isOutdated: Bool {
+        guard let data = try? Data(contentsOf: settingsFile),
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let stop = (root["hooks"] as? [String: Any])?["Stop"] as? [[String: Any]]
+        else { return false }
+        let hooks = stop.flatMap { $0["hooks"] as? [[String: Any]] ?? [] }
+        guard let awaitHook = hooks.first(where: {
+            ($0["command"] as? String)?.contains(".mac-island/hook.sh --await-reply") == true
+        }) else { return true }
+        return ((awaitHook["timeout"] as? NSNumber)?.intValue ?? 0) < 86400
+    }
+
     /// Where jq lives: built into macOS 15+, or Homebrew's on Apple silicon and Intel.
     private static let jqLocations = ["/usr/bin/jq", "/opt/homebrew/bin/jq", "/usr/local/bin/jq"]
 

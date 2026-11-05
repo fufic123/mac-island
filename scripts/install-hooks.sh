@@ -49,8 +49,9 @@ jq --arg cmd "$HOOK" --argjson events "$EVENTS" --argjson toolEvents "$TOOL_EVEN
     { hooks: [{ type: "command", command: $cmd, timeout: (if $e == "PermissionRequest" then 86400 else 5 end) }] }
     + (if ($toolEvents | index($e)) then { matcher: "*" } else {} end);
   # Background Stop hook that waits for a reply typed in the island and wakes Claude with it.
+  # Without a long timeout Claude kills it after 10 minutes and later replies go nowhere.
   def awaitEntry:
-    { hooks: [{ type: "command", command: ($cmd + " --await-reply"), async: true, asyncRewake: true }] };
+    { hooks: [{ type: "command", command: ($cmd + " --await-reply"), async: true, asyncRewake: true, timeout: 86400 }] };
   .hooks = (.hooks // {})
   | reduce $events[] as $e (.;
       .hooks[$e] = (((.hooks[$e] // []) | strip)

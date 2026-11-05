@@ -9,6 +9,9 @@ extension IslandController {
     func startOnboarding() {
         if ClaudeHooks.isInstalled {
             defaults.set(true, forKey: OnboardingDefaults.connectedKey)
+            if ClaudeHooks.isOutdated, ClaudeHooks.hasJQ {
+                Task { _ = await ClaudeHooks.install() }
+            }
             return
         }
         if defaults.bool(forKey: OnboardingDefaults.connectedKey) {

@@ -387,6 +387,12 @@ public final class SessionStore {
         let id = envelope.payload.sessionId
         replyWaiters.removeValue(forKey: id)?.close()
         replyWaiters[id] = connection
+        connection.onPeerClose { [weak self, weak connection] in
+            Task { @MainActor in
+                guard let self, let connection, self.replyWaiters[id] === connection else { return }
+                self.releaseReplyWaiter(for: id)
+            }
+        }
         // The background hook can arrive before the regular Stop event.
         var s = sessions[id] ?? AgentSession(id: id, startedAt: .now, lastEventAt: .now)
         if let cwd = envelope.payload.cwd, (envelope.payload.agentId == nil && !Self.isSubagentWorktree(cwd)) || s.cwd == nil {
