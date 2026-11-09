@@ -13,6 +13,11 @@ await_reply=false
 payload=$(cat)
 [ -n "$payload" ] || exit 0
 
+# Claude Desktop's Code sessions have no terminal; any TERM_PROGRAM they carry is inherited from
+# whatever launched the app. Name the host instead, so a click focuses Claude Desktop.
+term="${TERM_PROGRAM:-}"
+[ "${CLAUDE_CODE_ENTRYPOINT:-}" = "claude-desktop" ] && term="claude-desktop"
+
 # Controlling terminal of the Claude process (inherited by this hook), e.g. "ttys004".
 tty=$(ps -o tty= -p $$ 2>/dev/null | tr -d ' ')
 [ "$tty" = "??" ] && tty=""
@@ -40,7 +45,7 @@ if [ -n "$cwd" ]; then
 fi
 
 envelope=$(printf '%s' "$payload" \
-  | jq -c --arg term "${TERM_PROGRAM:-}" --arg tty "$tty" --argjson pid "$pid" --arg branch "$branch" \
+  | jq -c --arg term "$term" --arg tty "$tty" --argjson pid "$pid" --arg branch "$branch" \
       --argjson await "$await_reply" \
       '{source: "claude", term_program: $term, tty: $tty, claude_pid: $pid, git_branch: $branch, await_reply: $await, payload: .}' 2>/dev/null)
 [ -n "$envelope" ] || exit 0

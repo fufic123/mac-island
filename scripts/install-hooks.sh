@@ -9,12 +9,10 @@ DIR="$HOME/.mac-island"
 HOOK="$DIR/hook.sh"
 SETTINGS="$HOME/.claude/settings.json"
 INSTALL=true
-COPY=false
 for arg in "$@"; do
   case "$arg" in
     --uninstall) INSTALL=false ;;
-    # Copy rather than symlink: used by the app, whose bundle may move or be replaced.
-    --copy) COPY=true ;;
+    --copy) ;; # Kept for older callers; the hook is always copied now.
   esac
 done
 
@@ -23,17 +21,11 @@ TOOL_EVENTS='["PreToolUse","PostToolUse","PermissionRequest"]'
 
 if $INSTALL; then
   mkdir -p "$DIR"
-  if $COPY && [ -L "$HOOK" ] && [ -e "$HOOK" ]; then
-    : # A developer checkout's symlink: keep it, so edits there still take effect.
-  elif $COPY; then
-    rm -f "$HOOK"
-    cp "$SRC" "$HOOK"
-    chmod +x "$HOOK"
-  else
-    chmod +x "$SRC"
-    # Symlink, so edits to the hook in the repo take effect without reinstalling.
-    ln -sf "$SRC" "$HOOK"
-  fi
+  # Always a copy, never a symlink into the checkout: Claude Desktop runs Claude Code without
+  # access to ~/Documents, so a hook that lives there fails with "Operation not permitted".
+  rm -f "$HOOK"
+  cp "$SRC" "$HOOK"
+  chmod +x "$HOOK"
 fi
 
 mkdir -p "$(dirname "$SETTINGS")"

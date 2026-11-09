@@ -15,6 +15,7 @@ enum ClaudeHooks {
     /// The hooks were installed by an older version: the reply hook lacks its long timeout, so
     /// Claude kills it after 10 minutes and replies typed later never arrive.
     static var isOutdated: Bool {
+        if hookScriptIsStale { return true }
         guard let data = try? Data(contentsOf: settingsFile),
               let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let stop = (root["hooks"] as? [String: Any])?["Stop"] as? [[String: Any]]
@@ -24,6 +25,16 @@ enum ClaudeHooks {
             ($0["command"] as? String)?.contains(".mac-island/hook.sh --await-reply") == true
         }) else { return true }
         return ((awaitHook["timeout"] as? NSNumber)?.intValue ?? 0) < 86400
+    }
+
+    /// ~/.mac-island/hook.sh is a symlink (older developer installs; Claude Desktop can't follow
+    /// it into ~/Documents) or differs from the hook bundled with this version of the app.
+    private static var hookScriptIsStale: Bool {
+        let installed = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".mac-island/hook.sh")
+        if (try? installed.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true { return true }
+        guard let bundled = Bundle.main.url(forResource: "island-hook", withExtension: "sh"),
+              let want = try? Data(contentsOf: bundled) else { return false }
+        return (try? Data(contentsOf: installed)) != want
     }
 
     /// Where jq lives: built into macOS 15+, or Homebrew's on Apple silicon and Intel.

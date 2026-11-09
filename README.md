@@ -81,7 +81,7 @@ Only the Xcode Command Line Tools are needed.
 
 ```sh
 ./scripts/install-app.sh      # build, install to /Applications, start at login
-./scripts/install-hooks.sh    # connect Claude Code (symlinks the hook to this checkout)
+./scripts/install-hooks.sh    # connect Claude Code (copies the hook to ~/.mac-island; re-run after editing it)
 ```
 
 `./scripts/install-app.sh --uninstall` and `./scripts/install-hooks.sh --uninstall` undo them. `./scripts/release.sh v0.1.0` builds the app and publishes it as a GitHub release.
