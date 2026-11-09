@@ -26,6 +26,10 @@ struct SessionsPanel: View {
 
             MeasuredScroll {
                 VStack(spacing: 0) {
+                    if let update = model.update {
+                        UpdateBanner(model: model, update: update)
+                            .padding(.top, 8)
+                    }
                     if sessions.isEmpty {
                         emptyState
                     } else if sessions.count > Self.groupThreshold {

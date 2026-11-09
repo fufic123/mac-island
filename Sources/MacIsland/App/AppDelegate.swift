@@ -12,6 +12,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         LoginItem.register()
     }
 
+    @objc private func checkForUpdates() {
+        controller?.checkForUpdate(manual: true)
+    }
+
     @objc private func connectClaude() {
         controller?.offerConnect()
     }
@@ -25,6 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let name = "Mac Island"
         let appMenu = NSMenu(title: name)
         appMenu.addItem(withTitle: "About \(name)", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let update = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        update.target = self
+        appMenu.addItem(update)
         appMenu.addItem(.separator())
         let connect = NSMenuItem(title: "Connect to Claude Code…", action: #selector(connectClaude), keyEquivalent: "")
         connect.target = self

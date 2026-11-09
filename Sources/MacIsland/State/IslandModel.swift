@@ -113,6 +113,12 @@ final class IslandModel {
     /// Its tooltip, shown after the usual macOS hover delay.
     var showsOpenHint = false
     /// First-run step shown in the island, if any.
+    /// A newer release, offered at the top of the session list.
+    var update: AvailableUpdate?
+    var isUpdating = false
+    var updateError: String?
+    /// Set by the controller: downloads and installs `update`.
+    @ObservationIgnored var installUpdate: (() -> Void)?
     var onboarding: OnboardingStep?
     /// Installing the hooks is in progress.
     var isConnecting = false

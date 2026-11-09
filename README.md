@@ -66,13 +66,15 @@ The notch lights up with the state of your sessions, so a glance tells you wheth
 
 Open `MacIsland.dmg` and drag Mac Island to Applications. The app isn't notarized, so the first launch shows "MacIsland Not Opened": click **Done** (not Move to Trash), open **System Settings → Privacy & Security** and click **Open Anyway**. That's needed once.
 
-**Option 2, one command.** Paste this into Terminal. It downloads the latest release to `~/Applications` and opens it, without the Gatekeeper warning:
+**Option 2, one command.** Paste this into Terminal. It downloads the latest release to `/Applications` and opens it, without the Gatekeeper warning:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/fufic123/mac-island/main/scripts/install.sh | bash
 ```
 
 On first launch Mac Island asks to connect to Claude Code. It adds hooks to `~/.claude/settings.json` (a backup is saved next to it) and starts itself at login. Sessions started after that show up in the island.
+
+**Updates.** Mac Island checks GitHub for a new release every few hours (or now, from the app menu's **Check for Updates…**). When one is out, the session list offers it: click **Update** and the island downloads it, checks it is signed by the same developer, and restarts on the new version. Your hooks, settings and permissions stay. Versions before 0.3.16 can't update themselves; install once more with either option above.
 
 Requires a MacBook with a notch, macOS 14 or later, and `jq` (built into macOS 15 and later; `brew install jq` on 14).
 

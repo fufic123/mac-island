@@ -85,6 +85,7 @@ final class IslandController {
         startMouseTracking()
         startHookServer()
         startOnboarding()
+        startUpdateChecks()
     }
 
     private static let sessionsFile = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
