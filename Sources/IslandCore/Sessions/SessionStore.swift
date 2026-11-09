@@ -24,6 +24,8 @@ public final class SessionStore {
     private var responders: [String: PermissionResponder] = [:]
     /// Background Stop hooks waiting for a typed reply, one per session.
     private var replyWaiters: [String: HookConnection] = [:]
+    /// The process of each waiting reply hook, when the hook sent it.
+    @ObservationIgnored private var replyWaiterPids: [String: Int32] = [:]
     @ObservationIgnored public var onSignal: ((IslandSignal) -> Void)?
     /// When the last decision was made; the next queued request slides into the same spot.
     @ObservationIgnored private var lastDecisionAt: Date = .distantPast
@@ -373,6 +375,7 @@ public final class SessionStore {
         guard !text.isEmpty, let waiter = replyWaiters.removeValue(forKey: sessionId),
               var s = sessions[sessionId]
         else { return }
+        replyWaiterPids.removeValue(forKey: sessionId)
         waiter.send(Data(text.utf8))
         s.canReply = false
         s.suggestion = nil
@@ -388,12 +391,7 @@ public final class SessionStore {
         let id = envelope.payload.sessionId
         replyWaiters.removeValue(forKey: id)?.close()
         replyWaiters[id] = connection
-        connection.onPeerClose { [weak self, weak connection] in
-            Task { @MainActor in
-                guard let self, let connection, self.replyWaiters[id] === connection else { return }
-                self.releaseReplyWaiter(for: id)
-            }
-        }
+        replyWaiterPids[id] = envelope.hookPid
         // The background hook can arrive before the regular Stop event.
         var s = sessions[id] ?? AgentSession(id: id, startedAt: .now, lastEventAt: .now)
         if let cwd = envelope.payload.cwd, (envelope.payload.agentId == nil && !Self.isSubagentWorktree(cwd)) || s.cwd == nil {
@@ -405,7 +403,15 @@ public final class SessionStore {
         sessions[id] = s
     }
 
+    /// Drops reply hooks whose process is gone, so the island stops offering a reply they can't deliver.
+    public func releaseDeadReplyWaiters() {
+        for (id, pid) in replyWaiterPids where kill(pid, 0) != 0 && errno == ESRCH {
+            releaseReplyWaiter(for: id)
+        }
+    }
+
     private func releaseReplyWaiter(for sessionId: String) {
+        replyWaiterPids.removeValue(forKey: sessionId)
         replyWaiters.removeValue(forKey: sessionId)?.close()
         sessions[sessionId]?.canReply = false
     }

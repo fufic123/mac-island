@@ -176,15 +176,28 @@ func run() {
 
 MainActor.assumeIsolated { run() }
 
-do {
-    // A reply hook that dies (Claude's hook timeout) is noticed, so no reply is sent into the void.
-    var fds: [Int32] = [0, 0]
-    socketpair(AF_UNIX, SOCK_STREAM, 0, &fds)
-    let connection = HookConnection(fd: fds[0])
-    let closed = DispatchSemaphore(value: 0)
-    connection.onPeerClose { closed.signal() }
-    close(fds[1])
-    check(closed.wait(timeout: .now() + 2) == .success, "a reply hook that went away is noticed")
+MainActor.assumeIsolated {
+    // A reply hook stays offered while its process lives (nc half-closes the socket right after
+    // sending, which must not count as gone) and is dropped once its process is gone.
+    func waiter(session: String, pid: Int32) -> (HookEnvelope, HookConnection) {
+        var fds: [Int32] = [0, 0]
+        socketpair(AF_UNIX, SOCK_STREAM, 0, &fds)
+        shutdown(fds[1], SHUT_WR)
+        let data = try! JSONSerialization.data(withJSONObject: [
+            "source": "claude", "await_reply": true, "hook_pid": pid,
+            "payload": ["session_id": session, "cwd": "/tmp/demo", "hook_event_name": "Stop"],
+        ])
+        return (try! HookEnvelope.decode(data), HookConnection(fd: fds[0]))
+    }
+    let store = SessionStore()
+    let (alive, aliveConn) = waiter(session: "live", pid: getpid())
+    store.apply(alive, reply: .awaitReply(aliveConn))
+    let (dead, deadConn) = waiter(session: "dead", pid: 99_999_999)
+    store.apply(dead, reply: .awaitReply(deadConn))
+    store.releaseDeadReplyWaiters()
+    check(store.sessions["live"]?.canReply == true, "a waiting reply hook stays offered after nc half-closes")
+    check(store.sessions["dead"]?.canReply == false, "a reply hook whose process is gone is no longer offered")
 }
+
 print(failures == 0 ? "All checks passed." : "\(failures) check(s) failed.")
 exit(failures == 0 ? 0 : 1)

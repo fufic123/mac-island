@@ -46,8 +46,8 @@ fi
 
 envelope=$(printf '%s' "$payload" \
   | jq -c --arg term "$term" --arg tty "$tty" --argjson pid "$pid" --arg branch "$branch" \
-      --argjson await "$await_reply" \
-      '{source: "claude", term_program: $term, tty: $tty, claude_pid: $pid, git_branch: $branch, await_reply: $await, payload: .}' 2>/dev/null)
+      --argjson await "$await_reply" --argjson hookpid $$ \
+      '{source: "claude", term_program: $term, tty: $tty, claude_pid: $pid, git_branch: $branch, await_reply: $await, hook_pid: $hookpid, payload: .}' 2>/dev/null)
 [ -n "$envelope" ] || exit 0
 
 if $await_reply; then

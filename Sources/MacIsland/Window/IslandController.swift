@@ -102,6 +102,7 @@ final class IslandController {
         interruptTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { _ in
             MainActor.assumeIsolated { [weak self] in
                 store.checkInterrupts()
+                store.releaseDeadReplyWaiters()
                 store.refreshCosts()
                 store.discoverSubagents()
                 store.save(to: Self.sessionsFile)

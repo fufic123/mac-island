@@ -10,6 +10,9 @@ public struct HookEnvelope: Decodable, Sendable {
     public let gitBranch: String?
     /// Sent by the background Stop hook, which then waits for a typed reply.
     public let awaitReply: Bool?
+    /// The waiting hook's own process, so the island notices when Claude kills it (hook timeout,
+    /// session quit). The socket can't tell: nc half-closes it as soon as the request is sent.
+    public let hookPid: Int32?
     public let payload: ClaudeHookPayload
 }
 
