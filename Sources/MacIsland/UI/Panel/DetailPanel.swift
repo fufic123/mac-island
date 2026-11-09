@@ -187,17 +187,10 @@ struct DetailPanel: View {
         }
     }
 
-    /// Shows the tooltip after the usual macOS delay; hides it at once.
+    /// Shows the tooltip together with the button's hover highlight.
     private func hoverOpenButton(_ inside: Bool) {
         model.hoversOpenButton = inside
-        guard inside else {
-            withAnimation(.easeOut(duration: 0.12)) { model.showsOpenHint = false }
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [model] in
-            guard model.hoversOpenButton, !model.showsOpenHint else { return }
-            withAnimation(.easeOut(duration: 0.15)) { model.showsOpenHint = true }
-        }
+        withAnimation(.easeOut(duration: 0.12)) { model.showsOpenHint = inside }
     }
 
     private func send() {

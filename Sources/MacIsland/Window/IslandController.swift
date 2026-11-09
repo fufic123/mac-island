@@ -11,6 +11,11 @@ final class IslandController {
     private var interruptTimer: Timer?
     /// Set after an action closed the island under the cursor; cleared when the cursor leaves.
     private var holdClosedUntilExit = false
+    /// Opening a session from a long list shrinks the island out from under the cursor. Until the
+    /// cursor leaves the area the island had when it was clicked (or comes back onto it), stay open.
+    private var holdOpenRect: NSRect?
+    private var lastHoverRect: NSRect?
+    private var lastSelectedSessionId: String?
     private var panel: IslandPanel?
     private var hosting: NSView?
     private var geometry: NotchGeometry?
@@ -245,7 +250,15 @@ final class IslandController {
     private func updateHover() {
         guard let rect = hoverRect() else { return }
         let mouse = NSEvent.mouseLocation
-        let inside = rect.contains(mouse)
+        if model.selectedSessionId != lastSelectedSessionId {
+            lastSelectedSessionId = model.selectedSessionId
+            if let last = lastHoverRect, last.height > rect.height, last.contains(mouse) { holdOpenRect = last }
+        }
+        lastHoverRect = rect
+        if let hold = holdOpenRect, rect.contains(mouse) || !hold.contains(mouse) || !model.isExpanded {
+            holdOpenRect = nil
+        }
+        let inside = rect.contains(mouse) || holdOpenRect != nil
         updateClickThrough(mouse)
         updatePointer(mouse, inside: inside)
         if holdClosedUntilExit {
