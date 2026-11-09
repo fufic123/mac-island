@@ -76,6 +76,10 @@ public final class SessionStore {
         if ["UserPromptSubmit", "PreToolUse", "SessionEnd"].contains(p.hookEventName) {
             releaseReplyWaiter(for: p.sessionId)
         }
+        // Typing in the terminal answers Claude there; a reply held in the island is moot.
+        if ["UserPromptSubmit", "SessionEnd"].contains(p.hookEventName) {
+            sessions[p.sessionId]?.queuedReply = nil
+        }
         // A later event from the same agent means the request was settled elsewhere (e.g. in the
         // terminal), so release the waiting hook. Notifications don't settle anything, and other
         // subagents keep working while one waits.
@@ -372,12 +376,27 @@ public final class SessionStore {
     /// Sends a reply typed in the island to Claude via the waiting background Stop hook.
     public func reply(sessionId: String, text: String, now: Date = .now) {
         let text = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, let waiter = replyWaiters.removeValue(forKey: sessionId),
-              var s = sessions[sessionId]
-        else { return }
+        guard !text.isEmpty, sessions[sessionId] != nil else { return }
+        guard let waiter = replyWaiters.removeValue(forKey: sessionId) else {
+            // Claude is busy (or its turn ended before the island was listening): hold the reply
+            // and hand it over as soon as the turn ends.
+            sessions[sessionId]?.queuedReply = text
+            return
+        }
+        deliver(text, via: waiter, to: sessionId, now: now)
+    }
+
+    /// Drops a reply held for the end of the turn.
+    public func cancelQueuedReply(sessionId: String) {
+        sessions[sessionId]?.queuedReply = nil
+    }
+
+    private func deliver(_ text: String, via waiter: HookConnection, to sessionId: String, now: Date) {
+        guard var s = sessions[sessionId] else { return }
         replyWaiterPids.removeValue(forKey: sessionId)
         waiter.send(Data(text.utf8))
         s.canReply = false
+        s.queuedReply = nil
         s.suggestion = nil
         s.status = .working
         s.activity = "Thinking…"
@@ -401,6 +420,10 @@ public final class SessionStore {
         if let pid = envelope.claudePid { s.pid = pid }
         s.canReply = true
         sessions[id] = s
+        if let queued = s.queuedReply {
+            replyWaiters.removeValue(forKey: id)
+            deliver(queued, via: connection, to: id, now: .now)
+        }
     }
 
     /// Drops reply hooks whose process is gone, so the island stops offering a reply they can't deliver.

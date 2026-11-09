@@ -81,6 +81,8 @@ public struct AgentSession: Identifiable, Sendable, Codable {
     public var lastMessage: String?
     /// The background Stop hook is waiting, so a reply typed in the island reaches Claude.
     public var canReply = false
+    /// Typed in the island while Claude was busy; sent the moment its turn ends.
+    public var queuedReply: String?
     /// Where Claude writes the conversation (under ~/.claude, readable without TCC prompts).
     public var transcriptPath: String?
     /// What the session has cost so far at API prices, subagents included.

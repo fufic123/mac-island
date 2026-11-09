@@ -120,7 +120,39 @@ struct DetailPanel: View {
                         .padding(.top, 16)
                     }
 
-                    if session.canReply {
+                    if let queued = session.queuedReply {
+                        HStack(alignment: .top, spacing: 10) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Sends when Claude finishes")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .textCase(.uppercase)
+                                    .tracking(0.4)
+                                    .foregroundStyle(Crystal.amethystText)
+                                Text(queued)
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(Crystal.text)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            Button { model.store.cancelQueuedReply(sessionId: session.id) } label: {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundStyle(Crystal.secondary)
+                                    .frame(width: 28, height: 28)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .pointingHand()
+                            .accessibilityLabel("Cancel queued message")
+                        }
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 14)
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Crystal.amethyst.opacity(0.1)))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Crystal.amethyst.opacity(0.35), lineWidth: 1))
+                        .padding(.top, 16)
+                    }
+
+                    if session.queuedReply == nil {
                         // The system placeholder is near-black on this dark field, so draw our own.
                         TextField("", text: draft, axis: .vertical)
                             .textFieldStyle(.plain)
@@ -128,7 +160,7 @@ struct DetailPanel: View {
                             .foregroundStyle(Crystal.text)
                             .background(alignment: .leading) {
                                 if model.replyDraft.isEmpty {
-                                    Text("Reply to Claude…")
+                                    Text(session.canReply ? "Reply to Claude…" : "Message Claude when it finishes…")
                                         .font(.system(size: 14))
                                         .foregroundStyle(Crystal.tertiary)
                                         .allowsHitTesting(false)
@@ -155,9 +187,9 @@ struct DetailPanel: View {
                             .padding(.top, 16)
                     }
 
-                    if session.canReply {
+                    if session.queuedReply == nil {
                         CapsuleButton(
-                            title: "Send",
+                            title: session.canReply ? "Send" : "Send when done",
                             background: canSend ? Crystal.amethyst : Crystal.button,
                             foreground: canSend ? Color(hex: 0x170B33) : Crystal.tertiary,
                             action: send

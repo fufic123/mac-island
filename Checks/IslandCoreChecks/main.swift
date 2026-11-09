@@ -197,6 +197,22 @@ MainActor.assumeIsolated {
     store.releaseDeadReplyWaiters()
     check(store.sessions["live"]?.canReply == true, "a waiting reply hook stays offered after nc half-closes")
     check(store.sessions["dead"]?.canReply == false, "a reply hook whose process is gone is no longer offered")
+
+    // A reply typed while Claude works is held, then handed to the reply hook when the turn ends.
+    store.apply(envelope(["session_id": "busy", "hook_event_name": "UserPromptSubmit", "prompt": "go"]))
+    store.reply(sessionId: "busy", text: "also check the tests")
+    check(store.sessions["busy"]?.queuedReply == "also check the tests", "a reply to a busy session is queued")
+    var fds: [Int32] = [0, 0]
+    socketpair(AF_UNIX, SOCK_STREAM, 0, &fds)
+    let data = try! JSONSerialization.data(withJSONObject: [
+        "source": "claude", "await_reply": true, "hook_pid": getpid(),
+        "payload": ["session_id": "busy", "cwd": "/tmp/demo", "hook_event_name": "Stop"],
+    ])
+    store.apply(try! HookEnvelope.decode(data), reply: .awaitReply(HookConnection(fd: fds[0])))
+    var buffer = [UInt8](repeating: 0, count: 64)
+    let n = read(fds[1], &buffer, buffer.count)
+    check(n > 0 && String(decoding: buffer[0..<n], as: UTF8.self) == "also check the tests", "the queued reply goes out when the turn ends")
+    check(store.sessions["busy"]?.queuedReply == nil && store.sessions["busy"]?.status == .working, "and the session is working again")
 }
 
 print(failures == 0 ? "All checks passed." : "\(failures) check(s) failed.")
