@@ -234,7 +234,7 @@ public final class SessionStore {
             break
         }
         sessions[p.sessionId] = s
-        log.info("\(s.projectName, privacy: .public)@\(s.gitBranch ?? "-", privacy: .public) pid=\(s.pid ?? -1) \(String(describing: s.status), privacy: .public): \(s.pendingPermission ?? s.activity ?? "-", privacy: .private)")
+        log.info("\(s.projectName, privacy: .private)@\(s.gitBranch ?? "-", privacy: .public) pid=\(s.pid ?? -1) \(String(describing: s.status), privacy: .public): \(s.pendingPermission ?? s.activity ?? "-", privacy: .private)")
     }
 
     /// Whether a finished internal fork is Claude Code's prompt suggestion. Its output is sent as
@@ -316,7 +316,7 @@ public final class SessionStore {
         s.pendingAgentTasks = []
         s.lastEventAt = now
         sessions[id] = s
-        log.info("\(s.projectName, privacy: .public) \(byUser ? "interrupted by the user" : "stopped on an API error", privacy: .public)")
+        log.info("\(s.projectName, privacy: .private) \(byUser ? "interrupted by the user" : "stopped on an API error", privacy: .public)")
     }
 
     private static func isIdlePrompt(_ p: ClaudeHookPayload) -> Bool {

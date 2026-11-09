@@ -8,7 +8,7 @@ private let log = Logger(subsystem: "com.fufic123.macisland", category: "focus")
 @MainActor
 enum TerminalFocuser {
     static func focus(_ session: AgentSession) {
-        log.info("focus \(session.projectName, privacy: .public) term=\(session.termProgram ?? "-", privacy: .public) tty=\(session.tty ?? "-", privacy: .public) pid=\(session.pid ?? -1)")
+        log.info("focus \(session.projectName, privacy: .private) term=\(session.termProgram ?? "-", privacy: .public) tty=\(session.tty ?? "-", privacy: .public) pid=\(session.pid ?? -1)")
         // The tty arrives over the socket, so accept only the "ttysNNN" shape and pass it
         // to AppleScript as an argument rather than splicing it into the source.
         if let tty = session.tty,
