@@ -108,6 +108,8 @@ final class IslandModel {
     var replyDraft = ""
     /// The reply screen shows Claude's message cut to its first words until this is set.
     var showsFullMessage = false
+    /// The cursor is over the session screen's "open" button; its hint shows under the header.
+    var hoversOpenButton = false
     /// First-run step shown in the island, if any.
     var onboarding: OnboardingStep?
     /// Installing the hooks is in progress.

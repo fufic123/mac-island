@@ -36,6 +36,19 @@ struct DetailPanel: View {
                 .buttonStyle(.plain)
                 .pointingHand()
                 Spacer()
+                Button(action: onFocus) {
+                    Image(systemName: "arrow.up.forward.app")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(model.hoversOpenButton ? Crystal.text : Crystal.secondary)
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(model.hoversOpenButton ? Crystal.keyCap : Crystal.button))
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .pointingHand()
+                .accessibilityLabel("Open in \(hostName)")
+                .onHover { model.hoversOpenButton = $0 }
+                .padding(.trailing, 10)
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(time)
                         .font(.system(size: 13).monospacedDigit())
@@ -50,6 +63,17 @@ struct DetailPanel: View {
             }
             .frame(height: model.notchHeight)
             .padding(.horizontal, 20)
+
+            // A tooltip wouldn't show: the island's app is never active.
+            if model.hoversOpenButton {
+                Text("Opens this chat in \(hostName). Clicking the title or Claude's message does the same.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Crystal.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 6)
+                    .transition(.opacity)
+            }
 
             MeasuredScroll {
                 VStack(alignment: .leading, spacing: 0) {
@@ -109,6 +133,10 @@ struct DetailPanel: View {
                                 }
                             }
                             .lineLimit(1...5)
+                            // No autocorrect or Writing Tools: their popovers can't draw in a panel
+                            // whose app is never active and show up as an empty grey box.
+                            .autocorrectionDisabled()
+                            .modifier(NoWritingTools())
                             .focused($fieldFocused)
                             .onSubmit(send)
                             .onExitCommand {
@@ -125,26 +153,35 @@ struct DetailPanel: View {
                             .padding(.top, 16)
                     }
 
-                    HStack(spacing: 10) {
-                        CapsuleButton(title: "Open terminal", background: Crystal.button, foreground: Crystal.text, action: onFocus)
-                        if session.canReply {
-                            CapsuleButton(
-                                title: "Send",
-                                background: canSend ? Crystal.amethyst : Crystal.button,
-                                foreground: canSend ? Color(hex: 0x170B33) : Crystal.tertiary,
-                                action: send
-                            )
-                            .disabled(!canSend)
-                        }
+                    if session.canReply {
+                        CapsuleButton(
+                            title: "Send",
+                            background: canSend ? Crystal.amethyst : Crystal.button,
+                            foreground: canSend ? Color(hex: 0x170B33) : Crystal.tertiary,
+                            action: send
+                        )
+                        .disabled(!canSend)
+                        .padding(.top, 16)
                     }
-                    .padding(.top, 16)
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 20)
             }
         }
         .onChange(of: fieldFocused) { _, focused in model.isComposing = focused }
-        .onDisappear { model.isComposing = false }
+        .onDisappear {
+            model.isComposing = false
+            model.hoversOpenButton = false
+        }
+    }
+
+    /// Where the "open" button takes you.
+    private var hostName: String {
+        switch session.termProgram {
+        case "claude-desktop": "Claude Desktop"
+        case "vscode": "the editor"
+        default: "the terminal"
+        }
     }
 
     private func send() {
@@ -210,6 +247,16 @@ struct DetailPanel: View {
         case .needsPermission, .question:
             Clock.format(now.timeIntervalSince(session.permissionRequestedAt ?? session.lastEventAt))
         case .done, .waitingForInput, .idle: Clock.format(session.stoppedTime)
+        }
+    }
+}
+
+private struct NoWritingTools: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15.0, *) {
+            content.writingToolsBehavior(.disabled)
+        } else {
+            content
         }
     }
 }
