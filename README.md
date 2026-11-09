@@ -51,8 +51,9 @@ The notch lights up with the state of your sessions, so a glance tells you wheth
   </tr>
 </table>
 
-- Click a session to jump to its terminal (Terminal, iTerm2, VS Code and others).
-- Reply to Claude from the island; the reply lands in the same session.
+- Click a session to jump to its terminal (Terminal, iTerm2, VS Code and others), or to Claude Desktop for its Code sessions.
+- Reply to Claude from the island; the reply lands in the same session. Write while Claude is still working and the message is sent the moment it finishes.
+- Works with Claude Desktop's Code tab too: its sessions show up under their chat titles.
 - Pressing Esc in the terminal is noticed too: the session shows as stopped.
 
 ## Install
