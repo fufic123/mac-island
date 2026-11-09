@@ -76,11 +76,17 @@ struct PermissionPanel: View {
                     if let always = session.alwaysAllowLabel {
                         Button { onDecide(.alwaysAllow) } label: {
                             Text(always)
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(Crystal.amberText)
-                                .frame(maxWidth: .infinity, minHeight: 28)
-                                .contentShape(Rectangle())
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                                .padding(.horizontal, 14)
+                                .frame(maxWidth: .infinity, minHeight: 38)
+                                .background(Capsule().fill(Crystal.amber.opacity(0.12)))
+                                .overlay(Capsule().strokeBorder(Crystal.amber.opacity(0.45), lineWidth: 1))
+                                .contentShape(Capsule())
                         }
+                        .help(always)
                         .buttonStyle(.plain)
                         .pointingHand()
                         .padding(.top, 10)
