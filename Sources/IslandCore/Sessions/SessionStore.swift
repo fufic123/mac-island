@@ -30,6 +30,7 @@ public final class SessionStore {
     /// Transcript modification date last looked at, per session.
     @ObservationIgnored private var transcriptChecked: [String: Date] = [:]
     @ObservationIgnored private let costMeter = TranscriptCost()
+    @ObservationIgnored private let desktopTitles = DesktopTitles()
     @ObservationIgnored private var costRefreshRunning = false
     @ObservationIgnored private let dailyCost = DailyCost()
     @ObservationIgnored private var dailyCostCheckedAt: Date = .distantPast
@@ -523,6 +524,11 @@ public final class SessionStore {
     public func discoverSubagents(now: Date = .now) {
         guard now.timeIntervalSince(subagentsCheckedAt) > 5 else { return }
         subagentsCheckedAt = now
+        // Claude Desktop names a chat after its first turn and may rename it later.
+        for (id, s) in sessions where s.termProgram == "claude-desktop" {
+            let title = desktopTitles.title(forSession: id)
+            if let title, title != s.desktopTitle { sessions[id]?.desktopTitle = title }
+        }
         for (id, s) in sessions {
             guard let path = s.transcriptPath else { continue }
             var updated = s

@@ -68,6 +68,8 @@ public struct AgentSession: Identifiable, Sendable, Codable {
     public var cwd: String?
     public var gitBranch: String?
     public var termProgram: String?
+    /// Chat title, for sessions run by Claude Desktop.
+    public var desktopTitle: String?
     public var tty: String?
     public var pid: Int32?
     public var status: SessionStatus = .idle
@@ -133,7 +135,8 @@ public struct AgentSession: Identifiable, Sendable, Codable {
     }
 
     public var projectName: String {
-        cwd.map { ($0 as NSString).lastPathComponent } ?? "Unknown"
+        if let desktopTitle { return desktopTitle }
+        return cwd.map { ($0 as NSString).lastPathComponent } ?? "Unknown"
     }
 
     /// cwd with the home folder shortened to "~".
