@@ -16,6 +16,7 @@ final class IslandController {
     private var holdOpenRect: NSRect?
     private var lastHoverRect: NSRect?
     private var lastSelectedSessionId: String?
+    let swipeState = SwipeState()
     private var panel: IslandPanel?
     private var hosting: NSView?
     private var geometry: NotchGeometry?
@@ -86,6 +87,7 @@ final class IslandController {
         startHookServer()
         startOnboarding()
         startUpdateChecks()
+        startSwipeTracking()
     }
 
     private static let sessionsFile = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -195,6 +197,8 @@ final class IslandController {
         peekWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + peek.duration, execute: work)
     }
+
+    func addMonitor(_ monitor: Any) { monitors.append(monitor) }
 
     // MARK: Hover
 

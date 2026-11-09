@@ -27,6 +27,11 @@ public final class SessionStore {
     /// The process of each waiting reply hook, when the hook sent it.
     @ObservationIgnored private var replyWaiterPids: [String: Int32] = [:]
     @ObservationIgnored public var onSignal: ((IslandSignal) -> Void)?
+    /// Sessions removed from the island by hand, with when. They come back with a new turn.
+    @ObservationIgnored private var dismissed: [String: Date] = [:]
+    @ObservationIgnored private var lastSavedDismissed: Data?
+    /// Events that start new work and so bring a removed session back.
+    private static let revivingEvents: Set<String> = ["SessionStart", "UserPromptSubmit", "PreToolUse", "PermissionRequest"]
     /// When the last decision was made; the next queued request slides into the same spot.
     @ObservationIgnored private var lastDecisionAt: Date = .distantPast
     /// Transcript modification date last looked at, per session.
@@ -66,6 +71,15 @@ public final class SessionStore {
 
     public func apply(_ envelope: HookEnvelope, reply: HookReply? = nil, at now: Date = .now) {
         let p = envelope.payload
+        if dismissed[p.sessionId] != nil {
+            guard envelope.awaitReply != true, Self.revivingEvents.contains(p.hookEventName) else {
+                // Still removed: let a waiting hook go instead of holding it.
+                if case let .awaitReply(connection) = reply { connection.release() }
+                if case let .permission(responder) = reply { responder.close() }
+                return
+            }
+            dismissed[p.sessionId] = nil
+        }
         if envelope.awaitReply == true {
             if case let .awaitReply(connection) = reply { registerReplyWaiter(connection, for: envelope) }
             return
@@ -516,18 +530,44 @@ public final class SessionStore {
 
     @ObservationIgnored private var lastSaved: Data?
 
+    /// Removes a session from the island until it starts new work.
+    public func dismiss(sessionId: String, now: Date = .now) {
+        guard let s = sessions[sessionId] else { return }
+        if let path = s.transcriptPath { costMeter.forget(transcriptPath: path) }
+        releaseResponder(for: sessionId)
+        releaseReplyWaiter(for: sessionId)
+        sessions[sessionId] = nil
+        transcriptChecked[sessionId] = nil
+        dismissed[sessionId] = now
+    }
+
+    private static func dismissedFile(next url: URL) -> URL {
+        url.deletingLastPathComponent().appendingPathComponent("dismissed.json")
+    }
+
     public func save(to url: URL) {
+        // A week is plenty: by then a removed session's process is long gone.
+        dismissed = dismissed.filter { Date.now.timeIntervalSince($0.value) < 7 * 24 * 3600 }
+        if let data = try? JSONEncoder().encode(dismissed), data != lastSavedDismissed {
+            try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if (try? data.write(to: Self.dismissedFile(next: url), options: .atomic)) != nil { lastSavedDismissed = data }
+        }
         guard let data = try? JSONEncoder().encode(Array(sessions.values)), data != lastSaved else { return }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if (try? data.write(to: url, options: .atomic)) != nil { lastSaved = data }
     }
 
     public func restore(from url: URL) {
+        if let data = try? Data(contentsOf: Self.dismissedFile(next: url)),
+           let saved = try? JSONDecoder().decode([String: Date].self, from: data) {
+            dismissed = saved
+            lastSavedDismissed = data
+        }
         guard let data = try? Data(contentsOf: url),
               let saved = try? JSONDecoder().decode([AgentSession].self, from: data)
         else { return }
         lastSaved = data
-        for var s in saved where sessions[s.id] == nil {
+        for var s in saved where sessions[s.id] == nil && dismissed[s.id] == nil {
             // Waiting hooks belonged to the old process; the terminal still has the prompt.
             s.awaitingDecision = false
             s.canReply = false

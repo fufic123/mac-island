@@ -213,6 +213,14 @@ MainActor.assumeIsolated {
     let n = read(fds[1], &buffer, buffer.count)
     check(n > 0 && String(decoding: buffer[0..<n], as: UTF8.self) == "also check the tests", "the queued reply goes out when the turn ends")
     check(store.sessions["busy"]?.queuedReply == nil && store.sessions["busy"]?.status == .working, "and the session is working again")
+
+    // A session removed by hand stays away through late events and comes back with new work.
+    store.apply(envelope(["session_id": "gone", "hook_event_name": "Stop", "last_assistant_message": "done"]))
+    store.dismiss(sessionId: "gone")
+    store.apply(envelope(["session_id": "gone", "hook_event_name": "Notification", "message": "Claude is waiting for your input"]))
+    check(store.sessions["gone"] == nil, "a removed session ignores late events")
+    store.apply(envelope(["session_id": "gone", "hook_event_name": "UserPromptSubmit", "prompt": "again"]))
+    check(store.sessions["gone"]?.status == .working, "a removed session returns with a new prompt")
 }
 
 print(failures == 0 ? "All checks passed." : "\(failures) check(s) failed.")

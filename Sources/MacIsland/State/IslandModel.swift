@@ -113,6 +113,12 @@ final class IslandModel {
     /// Its tooltip, shown after the usual macOS hover delay.
     var showsOpenHint = false
     /// First-run step shown in the island, if any.
+    /// A row being swiped to the left to remove it: which session and how far it has moved.
+    var swipeSessionId: String?
+    var swipeOffset: CGFloat = 0
+    /// Past this far left, letting go removes the session.
+    static let swipeRemoveDistance: CGFloat = 90
+
     /// A newer release, offered at the top of the session list.
     var update: AvailableUpdate?
     var isUpdating = false

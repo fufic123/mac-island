@@ -80,6 +80,7 @@ struct SessionsPanel: View {
             height: height,
             radius: radius,
             isHovered: model.hoveredSessionId == session.id,
+            swipeOffset: model.swipeSessionId == session.id ? model.swipeOffset : 0,
             onFocus: {
                 // Sessions with something to read or answer open in detail; the rest jump to the terminal.
                 if session.opensDetail {
@@ -87,6 +88,9 @@ struct SessionsPanel: View {
                 } else {
                     onFocus(session)
                 }
+            },
+            onRemove: {
+                withAnimation(Crystal.collapse) { model.store.dismiss(sessionId: session.id) }
             }
         )
     }

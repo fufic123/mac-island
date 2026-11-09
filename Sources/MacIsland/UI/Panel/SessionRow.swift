@@ -7,7 +7,10 @@ struct SessionRow: View {
     let height: CGFloat
     let radius: CGFloat
     let isHovered: Bool
+    /// How far the row is swiped left (0 or negative).
+    var swipeOffset: CGFloat = 0
     let onFocus: () -> Void
+    var onRemove: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -25,6 +28,26 @@ struct SessionRow: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: onFocus)
         .pointingHand()
+        .contextMenu {
+            Button("Remove from Island", action: onRemove)
+        }
+        .offset(x: swipeOffset)
+        // Revealed behind the row as it slides left.
+        .background(alignment: .trailing) {
+            if swipeOffset < 0 {
+                let armed = -swipeOffset >= IslandModel.swipeRemoveDistance
+                HStack(spacing: 6) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Remove")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(armed ? Crystal.rubyText : Crystal.tertiary)
+                .padding(.trailing, 16)
+                .opacity(min(1, -swipeOffset / 50))
+                .animation(.easeOut(duration: 0.12), value: armed)
+            }
+        }
         .background(
             GeometryReader { geo in
                 Color.clear.preference(
