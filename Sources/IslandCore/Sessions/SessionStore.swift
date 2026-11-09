@@ -408,7 +408,7 @@ public final class SessionStore {
 
     private func registerReplyWaiter(_ connection: HookConnection, for envelope: HookEnvelope) {
         let id = envelope.payload.sessionId
-        replyWaiters.removeValue(forKey: id)?.close()
+        replyWaiters.removeValue(forKey: id)?.release()
         replyWaiters[id] = connection
         replyWaiterPids[id] = envelope.hookPid
         // The background hook can arrive before the regular Stop event.
@@ -435,7 +435,7 @@ public final class SessionStore {
 
     private func releaseReplyWaiter(for sessionId: String) {
         replyWaiterPids.removeValue(forKey: sessionId)
-        replyWaiters.removeValue(forKey: sessionId)?.close()
+        replyWaiters.removeValue(forKey: sessionId)?.release()
         sessions[sessionId]?.canReply = false
     }
 

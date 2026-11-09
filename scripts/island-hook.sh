@@ -51,12 +51,21 @@ envelope=$(printf '%s' "$payload" \
 [ -n "$envelope" ] || exit 0
 
 if $await_reply; then
-  # Blocks until the user replies in the island, or the island lets go (new prompt, session end).
-  reply=$(printf '%s\n' "$envelope" | nc -U "$SOCK" 2>/dev/null)
-  if [ -n "$reply" ]; then
-    printf 'The user replied from Mac Island (the notch island):\n%s\n' "$reply" >&2
-    exit 2
-  fi
+  # Blocks until the user replies in the island, or the island lets go (new prompt, session end),
+  # which it says with RELEASE. Nothing at all means the island quit or restarted: wait for it to
+  # come back and ask again, so a reply typed after an update still reaches Claude. Claude ends
+  # this hook at its timeout or when the session ends.
+  RELEASE="__mac_island_release__"
+  while :; do
+    reply=$(printf '%s\n' "$envelope" | nc -U "$SOCK" 2>/dev/null)
+    case "$reply" in
+      "$RELEASE") exit 0 ;;
+      "") sleep 2 ;;
+      *)
+        printf 'The user replied from Mac Island (the notch island):\n%s\n' "$reply" >&2
+        exit 2 ;;
+    esac
+  done
 elif [ "$event" = "PermissionRequest" ]; then
   # Blocks until the island replies or drops the connection; the reply is the hook's output.
   printf '%s\n' "$envelope" | nc -U "$SOCK" 2>/dev/null

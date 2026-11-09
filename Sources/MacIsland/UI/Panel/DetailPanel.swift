@@ -123,7 +123,7 @@ struct DetailPanel: View {
                     if let queued = session.queuedReply {
                         HStack(alignment: .top, spacing: 10) {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("Sends when Claude finishes")
+                                Text(session.status == .working ? "Sends when Claude finishes" : "Waiting for Claude to pick it up")
                                     .font(.system(size: 11, weight: .semibold))
                                     .textCase(.uppercase)
                                     .tracking(0.4)
@@ -160,7 +160,7 @@ struct DetailPanel: View {
                             .foregroundStyle(Crystal.text)
                             .background(alignment: .leading) {
                                 if model.replyDraft.isEmpty {
-                                    Text(session.canReply ? "Reply to Claude…" : "Message Claude when it finishes…")
+                                    Text(session.canReply ? "Reply to Claude…" : session.status == .working ? "Message Claude when it finishes…" : "Message Claude…")
                                         .font(.system(size: 14))
                                         .foregroundStyle(Crystal.tertiary)
                                         .allowsHitTesting(false)
@@ -189,7 +189,7 @@ struct DetailPanel: View {
 
                     if session.queuedReply == nil {
                         CapsuleButton(
-                            title: session.canReply ? "Send" : "Send when done",
+                            title: session.canReply || session.status != .working ? "Send" : "Send when done",
                             background: canSend ? Crystal.amethyst : Crystal.button,
                             foreground: canSend ? Color(hex: 0x170B33) : Crystal.tertiary,
                             action: send

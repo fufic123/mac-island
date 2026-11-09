@@ -32,6 +32,12 @@ public final class HookConnection: @unchecked Sendable {
         close()
     }
 
+    /// Tells a waiting reply hook to stop waiting. Closing without it means the island went away,
+    /// and the hook keeps trying to reconnect.
+    public func release() {
+        send(Data("__mac_island_release__".utf8))
+    }
+
     public func close() {
         lock.lock()
         defer { lock.unlock() }
