@@ -37,8 +37,8 @@ struct DetailPanel: View {
                 .pointingHand()
                 Spacer()
                 Button(action: onFocus) {
-                    Image(systemName: "arrow.up.forward.app")
-                        .font(.system(size: 13, weight: .semibold))
+                    Image(systemName: "terminal")
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(model.hoversOpenButton ? Crystal.text : Crystal.secondary)
                         .frame(width: 30, height: 30)
                         .background(Circle().fill(model.hoversOpenButton ? Crystal.keyCap : Crystal.button))
@@ -47,7 +47,19 @@ struct DetailPanel: View {
                 .buttonStyle(.plain)
                 .pointingHand()
                 .accessibilityLabel("Open in \(hostName)")
-                .onHover { model.hoversOpenButton = $0 }
+                .onHover(perform: hoverOpenButton)
+                // The system tooltip never shows (the island's app is never active), so draw one
+                // that looks like it, floating under the button without moving anything.
+                .overlay(alignment: .topTrailing) {
+                    if model.showsOpenHint {
+                        Tooltip(text: "Open this chat in \(hostName). Clicking the island's title or message does the same.")
+                            .fixedSize(horizontal: true, vertical: true)
+                            .offset(y: 36)
+                            .transition(.opacity.animation(.easeOut(duration: 0.15)))
+                            .allowsHitTesting(false)
+                    }
+                }
+                .zIndex(1)
                 .padding(.trailing, 10)
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(time)
@@ -63,17 +75,7 @@ struct DetailPanel: View {
             }
             .frame(height: model.notchHeight)
             .padding(.horizontal, 20)
-
-            // A tooltip wouldn't show: the island's app is never active.
-            if model.hoversOpenButton {
-                Text("Opens this chat in \(hostName). Clicking the title or Claude's message does the same.")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Crystal.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 20)
-                    .padding(.top, 6)
-                    .transition(.opacity)
-            }
+            .zIndex(1)
 
             MeasuredScroll {
                 VStack(alignment: .leading, spacing: 0) {
@@ -172,6 +174,7 @@ struct DetailPanel: View {
         .onDisappear {
             model.isComposing = false
             model.hoversOpenButton = false
+            model.showsOpenHint = false
         }
     }
 
@@ -181,6 +184,19 @@ struct DetailPanel: View {
         case "claude-desktop": "Claude Desktop"
         case "vscode": "the editor"
         default: "the terminal"
+        }
+    }
+
+    /// Shows the tooltip after the usual macOS delay; hides it at once.
+    private func hoverOpenButton(_ inside: Bool) {
+        model.hoversOpenButton = inside
+        guard inside else {
+            withAnimation(.easeOut(duration: 0.12)) { model.showsOpenHint = false }
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [model] in
+            guard model.hoversOpenButton, !model.showsOpenHint else { return }
+            withAnimation(.easeOut(duration: 0.15)) { model.showsOpenHint = true }
         }
     }
 
@@ -258,5 +274,24 @@ private struct NoWritingTools: ViewModifier {
         } else {
             content
         }
+    }
+}
+
+/// Looks like the system's dark tooltip: small text on a dark grey rounded box with a hairline edge.
+private struct Tooltip: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11))
+            .foregroundStyle(Color(hex: 0xEDEDED))
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(width: 230, alignment: .leading)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color(hex: 0x2B2B2D)))
+            .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).strokeBorder(Color.white.opacity(0.14), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.35), radius: 6, y: 2)
     }
 }
