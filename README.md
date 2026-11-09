@@ -117,3 +117,60 @@ Claude Code hooks send each event as JSON over a Unix socket (`~/.mac-island/isl
 ## License
 
 [PolyForm Noncommercial 1.0.0](LICENSE). Free for personal, educational and other noncommercial use. Commercial use requires permission from the author.
+
+## Features
+
+Screenshots of the island itself, drawn by `MacIsland --render-screenshots <folder>` with demo sessions.
+
+<table>
+  <tr>
+    <td width="50%"><img src="assets/screenshots/compact.png" alt="Collapsed island lit around the notch"></td>
+    <td width="50%"><img src="assets/screenshots/feature-sessions.png" alt="Session list with running subagents"></td>
+  </tr>
+  <tr>
+    <td><b>Status at a glance.</b> The light around the notch says if a session needs you (amber), is working (emerald) or just finished (amethyst).</td>
+    <td><b>Every session in one list.</b> What each one is doing, how long it has been at it, and the subagents it is running.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/feature-permission.png" alt="Permission prompt with Deny, Allow and Always allow"></td>
+    <td><img src="assets/screenshots/feature-done.png" alt="Done announcement under the notch"></td>
+  </tr>
+  <tr>
+    <td><b>Answer permission prompts.</b> The full command, the folder and Claude's reason, then Deny, Allow or Always allow (the whole rule is always shown).</td>
+    <td><b>Done announcements.</b> Claude's closing line drops down from the notch when a turn ends.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/feature-reply.png" alt="Session detail with a reply field"></td>
+    <td><img src="assets/screenshots/feature-queued.png" alt="A message queued until Claude finishes"></td>
+  </tr>
+  <tr>
+    <td><b>Reply from the island.</b> Read Claude's last message and answer it; the reply lands in the same session.</td>
+    <td><b>Message a busy session.</b> Write while Claude is still working: the message waits and is sent the moment it finishes. Cancel it with ✕.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/feature-open.png" alt="Open button with its tooltip"></td>
+    <td><img src="assets/screenshots/feature-swipe.png" alt="A session swiped open on its Remove button"></td>
+  </tr>
+  <tr>
+    <td><b>Jump to the chat.</b> The terminal button (or a click on the title or message) opens the session in Terminal, iTerm2, VS Code and others, or in Claude Desktop.</td>
+    <td><b>Swipe to remove.</b> Swipe a session left with two fingers to uncover Remove; a long swipe or a click removes it. It comes back if it starts new work.</td>
+  </tr>
+  <tr>
+    <td><img src="assets/screenshots/feature-update.png" alt="Update banner at the top of the session list"></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td><b>Updates in one click.</b> New releases show up at the top of the list; Update downloads, checks the signature and restarts on the new version.</td>
+    <td></td>
+  </tr>
+</table>
+
+Also:
+
+- **Claude Desktop.** Code sessions from Claude Desktop's Code tab show up too, under their chat titles.
+- **Subagents.** Running subagents are listed under their session, including ones started before the island was.
+- **Esc and API errors.** A turn stopped with Esc, or by an API error, shows as stopped instead of running forever.
+- **Survives restarts.** Sessions, and a reply you can still send, carry over when the island restarts or updates.
+- **Cost.** What each conversation and all of today's cost at API prices.
+- **Stays out of the way.** Only the island itself takes clicks; the rest of the screen under its window works as usual. One copy runs at a time.
+
