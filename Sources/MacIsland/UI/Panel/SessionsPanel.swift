@@ -82,6 +82,11 @@ struct SessionsPanel: View {
             isHovered: model.hoveredSessionId == session.id,
             swipeOffset: model.swipeSessionId == session.id ? model.swipeOffset : 0,
             onFocus: {
+                // A row left open on Remove: a click on it just closes it again.
+                if model.swipeSessionId != nil {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { model.closeSwipe() }
+                    return
+                }
                 // Sessions with something to read or answer open in detail; the rest jump to the terminal.
                 if session.opensDetail {
                     model.selectedSessionId = session.id
@@ -90,7 +95,10 @@ struct SessionsPanel: View {
                 }
             },
             onRemove: {
-                withAnimation(Crystal.collapse) { model.store.dismiss(sessionId: session.id) }
+                withAnimation(Crystal.collapse) {
+                    model.store.dismiss(sessionId: session.id)
+                    model.closeSwipe()
+                }
             }
         )
     }

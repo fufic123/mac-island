@@ -8,12 +8,15 @@ final class SwipeState {
     var dx: CGFloat = 0
     var dy: CGFloat = 0
     var axis: Axis?
+    /// Where the row started: 0, or open on its Remove button.
+    var base: CGFloat = 0
 
     func reset() {
         sessionId = nil
         dx = 0
         dy = 0
         axis = nil
+        base = 0
     }
 }
 
@@ -44,6 +47,7 @@ extension IslandController {
             swipe.reset()
             let onList = model.isExpanded && model.selectedSessionId == nil && model.store.pendingDecisions.isEmpty
             swipe.sessionId = onList ? model.hoveredSessionId : nil
+            if let id = swipe.sessionId, model.swipeSessionId == id { swipe.base = model.swipeOffset }
             return false
         }
         // Momentum after a horizontal swipe would scroll the list; swallow it.
@@ -57,36 +61,46 @@ extension IslandController {
                 swipe.axis = abs(swipe.dx) > abs(swipe.dy) * 1.5 ? .horizontal : .vertical
             }
             guard swipe.axis == .horizontal else { return false }
+            if model.swipeSessionId != id {
+                // Another row was left open; this swipe takes over.
+                model.swipeOffset = 0
+                swipe.base = 0
+            }
             model.swipeSessionId = id
-            // Left follows the fingers; right only gives a little, like a rubber band.
-            model.swipeOffset = swipe.dx < 0 ? swipe.dx : min(12, swipe.dx * 0.2)
+            // Left follows the fingers; past the closed position it only gives a little.
+            let x = swipe.base + swipe.dx
+            model.swipeOffset = x < 0 ? x : min(12, x * 0.2)
             return true
         }
         if phase == .ended || phase == .cancelled {
             defer { swipe.sessionId = nil }
             guard swipe.axis == .horizontal else { return false }
-            finishSwipe(remove: phase == .ended && model.swipeOffset <= -IslandModel.swipeRemoveDistance, id: id)
+            finishSwipe(id: id)
             return true
         }
         return false
     }
 
-    private func finishSwipe(remove: Bool, id: String) {
-        guard remove else {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { model.swipeOffset = 0 }
+    /// Long swipe: remove. Past half the button: stay open on Remove. Otherwise: close.
+    private func finishSwipe(id: String) {
+        let spring = Animation.spring(response: 0.3, dampingFraction: 0.85)
+        let offset = -model.swipeOffset
+        if offset >= IslandModel.swipeRemoveDistance {
+            withAnimation(.easeIn(duration: 0.16)) { model.swipeOffset = -(IslandModel.panelWidth + 40) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) { [weak self] in
+                guard let self else { return }
+                withAnimation(Crystal.collapse) {
+                    self.model.store.dismiss(sessionId: id)
+                    self.model.closeSwipe()
+                }
+            }
+        } else if offset >= IslandModel.swipeRevealWidth / 2 {
+            withAnimation(spring) { model.swipeOffset = -IslandModel.swipeRevealWidth }
+        } else {
+            withAnimation(spring) { model.swipeOffset = 0 }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
                 guard let self, self.model.swipeOffset == 0 else { return }
                 self.model.swipeSessionId = nil
-            }
-            return
-        }
-        withAnimation(.easeIn(duration: 0.16)) { model.swipeOffset = -(IslandModel.panelWidth + 40) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) { [weak self] in
-            guard let self else { return }
-            withAnimation(Crystal.collapse) {
-                self.model.store.dismiss(sessionId: id)
-                self.model.swipeSessionId = nil
-                self.model.swipeOffset = 0
             }
         }
     }

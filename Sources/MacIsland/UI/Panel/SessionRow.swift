@@ -32,19 +32,30 @@ struct SessionRow: View {
             Button("Remove from Island", action: onRemove)
         }
         .offset(x: swipeOffset)
-        // Revealed behind the row as it slides left.
+        // Uncovered behind the row as it slides left.
         .background(alignment: .trailing) {
             if swipeOffset < 0 {
                 let armed = -swipeOffset >= IslandModel.swipeRemoveDistance
-                HStack(spacing: 6) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text("Remove")
-                        .font(.system(size: 13, weight: .semibold))
+                Button(action: onRemove) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .bold))
+                        Text("Remove")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundStyle(.white)
+                    .frame(width: max(IslandModel.swipeRevealWidth - 8, -swipeOffset - 8))
+                    .frame(maxHeight: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: radius, style: .continuous)
+                            .fill(armed ? Crystal.ruby : Crystal.ruby.opacity(0.75))
+                    )
+                    .contentShape(Rectangle())
                 }
-                .foregroundStyle(armed ? Crystal.rubyText : Crystal.tertiary)
-                .padding(.trailing, 16)
-                .opacity(min(1, -swipeOffset / 50))
+                .buttonStyle(.plain)
+                .pointingHand()
+                .padding(.vertical, 4)
+                .opacity(min(1, -swipeOffset / 40))
                 .animation(.easeOut(duration: 0.12), value: armed)
             }
         }

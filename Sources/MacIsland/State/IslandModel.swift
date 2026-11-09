@@ -82,7 +82,10 @@ struct Peek: Equatable {
 @Observable
 final class IslandModel {
     let store: SessionStore
-    var isExpanded = false
+    var isExpanded = false {
+        // A row left open on Remove closes with the island.
+        didSet { if !isExpanded { closeSwipe() } }
+    }
     var peek: Peek?
     var notchWidth: CGFloat = NotchGeometry.fallbackSize.width
     var notchHeight: CGFloat = NotchGeometry.fallbackSize.height
@@ -113,11 +116,19 @@ final class IslandModel {
     /// Its tooltip, shown after the usual macOS hover delay.
     var showsOpenHint = false
     /// First-run step shown in the island, if any.
-    /// A row being swiped to the left to remove it: which session and how far it has moved.
+    /// A row swiped to the left: which session and how far it has moved. A short swipe leaves it
+    /// open on its Remove button; a long one, or clicking Remove, removes the session.
     var swipeSessionId: String?
     var swipeOffset: CGFloat = 0
-    /// Past this far left, letting go removes the session.
-    static let swipeRemoveDistance: CGFloat = 90
+    /// Width of the Remove button a short swipe uncovers.
+    static let swipeRevealWidth: CGFloat = 96
+    /// Past this far left, letting go removes the session without the button.
+    static let swipeRemoveDistance: CGFloat = 260
+
+    func closeSwipe() {
+        swipeSessionId = nil
+        swipeOffset = 0
+    }
 
     /// A newer release, offered at the top of the session list.
     var update: AvailableUpdate?
