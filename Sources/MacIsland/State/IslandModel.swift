@@ -84,7 +84,7 @@ final class IslandModel {
     let store: SessionStore
     var isExpanded = false {
         // A row left open on Remove closes with the island, and so does the idle list.
-        didSet { if !isExpanded { closeSwipe(); showsIdle = false; dictation.stop() } }
+        didSet { if !isExpanded { closeSwipe(); showsIdle = false } }
     }
     var peek: Peek?
     var notchWidth: CGFloat = NotchGeometry.fallbackSize.width
@@ -100,8 +100,6 @@ final class IslandModel {
     var selectedSessionId: String? {
         didSet {
             if oldValue != selectedSessionId {
-                dictation.stop()
-                dictationError = nil
                 replyDraft = ""
                 showsFullMessage = false
             }
@@ -116,13 +114,6 @@ final class IslandModel {
     var isComposing = false
     /// Text being typed in the reply field. Cleared when a different session is opened.
     var replyDraft = ""
-    /// The mic is on and heard words are going into `replyDraft`; the island stays open meanwhile.
-    var isDictating = false
-    /// Why dictation couldn't start (permission denied, no microphone), shown under the field.
-    var dictationError: DictationError?
-    @ObservationIgnored private(set) var dictation: Dictation!
-    /// Typing or dictating: the island stays open even if the cursor wanders off.
-    var holdsOpen: Bool { isComposing || isDictating }
     /// The reply screen shows Claude's message cut to its first words until this is set.
     var showsFullMessage = false
     /// The cursor is over the session screen's "open" button.
@@ -161,7 +152,6 @@ final class IslandModel {
 
     init(store: SessionStore) {
         self.store = store
-        dictation = Dictation(model: self)
     }
 
     enum Mode { case compact, peek, panel }
