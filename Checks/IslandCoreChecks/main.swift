@@ -25,6 +25,15 @@ func envelope(_ payload: [String: Any]) -> HookEnvelope {
 @MainActor
 func run() {
     do {
+        // Plan limits saved from Claude Code's status line.
+        let data = Data(#"{"updated_at":1000,"rate_limits":{"five_hour":{"used_percentage":42.5,"resets_at":2000},"seven_day":{"used_percentage":130,"resets_at":9000}}}"#.utf8)
+        let limits = UsageLimits.decode(data)
+        check(limits?.fiveHour?.usedPercent == 42.5 && limits?.sevenDay?.usedPercent == 100, "plan limits are read and capped at 100%")
+        let later = limits?.current(at: Date(timeIntervalSince1970: 3000))
+        check(later?.fiveHour?.usedPercent == 0 && later?.sevenDay?.usedPercent == 100, "a limit past its reset time starts over at 0%")
+        check(UsageLimits.decode(Data(#"{"updated_at":1,"rate_limits":{}}"#.utf8)) == nil, "no windows means no limits")
+    }
+    do {
         // A subagent launched before the app saw its Task call is found by its metadata.
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("meta-\(UUID().uuidString)")
         let subagents = dir.appendingPathComponent("s1/subagents")

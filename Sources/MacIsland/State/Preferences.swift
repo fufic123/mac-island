@@ -40,6 +40,11 @@ final class Preferences {
         didSet { defaults.set(showCost, forKey: "showCost") }
     }
 
+    /// The subscription's 5-hour and weekly usage limits under the session list.
+    var showLimits: Bool {
+        didSet { defaults.set(showLimits, forKey: "showLimits") }
+    }
+
     var idleMode: IdleMode {
         didSet { defaults.set(idleMode.rawValue, forKey: "idleMode") }
     }
@@ -56,6 +61,7 @@ final class Preferences {
 
     private init() {
         showCost = defaults.object(forKey: "showCost") as? Bool ?? false
+        showLimits = defaults.object(forKey: "showLimits") as? Bool ?? true
         idleMode = defaults.string(forKey: "idleMode").flatMap(IdleMode.init) ?? .collapse
         finishedGlow = defaults.string(forKey: "finishedGlow").flatMap(FinishedGlow.init) ?? .untilOpened
         discoverSessions = defaults.object(forKey: "discoverSessions") as? Bool ?? true

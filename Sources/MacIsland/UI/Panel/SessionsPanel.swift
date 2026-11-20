@@ -61,6 +61,15 @@ struct SessionsPanel: View {
                     if mode == .collapse, !quiet.isEmpty {
                         idleToggle(count: quiet.count)
                     }
+                    if model.prefs.showLimits, let limits = model.limits {
+                        LimitsFooter(limits: limits.current(at: now), now: now)
+                            .padding(.horizontal, 12)
+                            .padding(.top, 12)
+                            .overlay(alignment: .top) {
+                                Rectangle().fill(Crystal.rowHover).frame(height: 1).padding(.horizontal, 12)
+                            }
+                            .padding(.top, 6)
+                    }
                     if model.prefs.showCost, let today = model.store.todayCost, today > 0 {
                         HStack {
                             Text("Total today")

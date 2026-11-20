@@ -109,6 +109,8 @@ final class IslandModel {
     }
     /// The collapsed "+N idle" row was opened.
     var showsIdle = false
+    /// The plan's usage limits as Claude Code last reported them; nil before the first report.
+    var limits: UsageLimits?
     let prefs = Preferences.shared
     /// The reply field has keyboard focus; the island stays open while typing.
     var isComposing = false

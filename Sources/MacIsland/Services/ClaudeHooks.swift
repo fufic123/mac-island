@@ -17,8 +17,12 @@ enum ClaudeHooks {
     static var isOutdated: Bool {
         if hookScriptIsStale { return true }
         guard let data = try? Data(contentsOf: settingsFile),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let stop = (root["hooks"] as? [String: Any])?["Stop"] as? [[String: Any]]
+              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else { return false }
+        // Older installs have no status line, which is what hands the island the plan limits.
+        let statusCommand = (root["statusLine"] as? [String: Any])?["command"] as? String ?? ""
+        if !statusCommand.contains(".mac-island/statusline.sh") || statusScriptIsStale { return true }
+        guard let stop = (root["hooks"] as? [String: Any])?["Stop"] as? [[String: Any]]
         else { return false }
         let hooks = stop.flatMap { $0["hooks"] as? [[String: Any]] ?? [] }
         guard let awaitHook = hooks.first(where: {
@@ -33,6 +37,13 @@ enum ClaudeHooks {
         let installed = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".mac-island/hook.sh")
         if (try? installed.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true { return true }
         guard let bundled = Bundle.main.url(forResource: "island-hook", withExtension: "sh"),
+              let want = try? Data(contentsOf: bundled) else { return false }
+        return (try? Data(contentsOf: installed)) != want
+    }
+
+    private static var statusScriptIsStale: Bool {
+        let installed = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".mac-island/statusline.sh")
+        guard let bundled = Bundle.main.url(forResource: "island-statusline", withExtension: "sh"),
               let want = try? Data(contentsOf: bundled) else { return false }
         return (try? Data(contentsOf: installed)) != want
     }

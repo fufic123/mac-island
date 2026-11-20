@@ -29,7 +29,13 @@ enum ScreenshotRenderer {
         var shots: [Shot] = []
 
         let list = demoStore()
-        shots.append(Shot(name: "feature-sessions", model: expanded(list)))
+        let listModel = expanded(list)
+        listModel.limits = UsageLimits(
+            fiveHour: .init(usedPercent: 64, resetsAt: now.addingTimeInterval(2 * 3600 + 14 * 60)),
+            sevenDay: .init(usedPercent: 23, resetsAt: now.addingTimeInterval(4 * 86400 + 3 * 3600)),
+            updatedAt: now
+        )
+        shots.append(Shot(name: "feature-sessions", model: listModel))
 
         let permission = demoStore()
         var fds: [Int32] = [0, 0]

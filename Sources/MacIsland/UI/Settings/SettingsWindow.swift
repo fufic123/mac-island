@@ -57,6 +57,11 @@ private struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
+                Toggle("Show plan limits", isOn: Binding(get: { prefs.showLimits }, set: { prefs.showLimits = $0 }))
+                Text("How much of your Claude plan's 5-hour and weekly limits is used, as Claude Code last reported it. Read on this Mac from Claude Code's status line; nothing is fetched.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 Toggle("Show cost", isOn: Binding(get: { prefs.showCost }, set: { prefs.showCost = $0 }))
                 Text("What sessions would cost at API prices. On a Pro, Max or Team plan nothing is billed per token.")
                     .font(.caption)

@@ -116,6 +116,8 @@ final class IslandController {
                 store.discoverSubagents()
                 if Preferences.shared.discoverSessions { store.discoverSessions() }
                 store.save(to: Self.sessionsFile)
+                let limits = UsageLimits.load()
+                if limits != model.limits { model.limits = limits }
                 self?.noticeFirstSession()
                 // The island can grow or shrink under a cursor that isn't moving.
                 self?.updateHover()
