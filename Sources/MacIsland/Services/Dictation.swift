@@ -7,11 +7,35 @@ struct DictationError: Equatable {
     let message: String
     var settingsURL: URL?
 
+    init(message: String, settingsURL: URL? = nil) {
+        self.message = message
+        self.settingsURL = settingsURL
+    }
+
     static func denied(_ permission: String, pane: String) -> DictationError {
         DictationError(
             message: "Mac Island needs \(permission) access to dictate.",
             settingsURL: URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")
         )
+    }
+
+    /// What to show when the recognizer gives up; nil for endings that need no message (nothing
+    /// was said, or dictation was stopped).
+    init?(recognitionError error: Error) {
+        let error = error as NSError
+        switch (error.domain, error.code) {
+        // Apple's recognizer only runs with macOS Dictation turned on.
+        case ("kLSRErrorDomain", 201), ("kAFAssistantErrorDomain", 1101), ("kAFAssistantErrorDomain", 1700):
+            self.init(
+                message: "Turn on Dictation in System Settings → Keyboard to dictate.",
+                settingsURL: URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension")
+            )
+        case ("kAFAssistantErrorDomain", 1110), ("kAFAssistantErrorDomain", 216), ("kAFAssistantErrorDomain", 203),
+             ("kLSRErrorDomain", 301), (NSCocoaErrorDomain, NSUserCancelledError):
+            return nil
+        default:
+            self.init(message: "Dictation stopped: \(error.localizedDescription)")
+        }
     }
 }
 
@@ -86,6 +110,7 @@ final class Dictation {
         task = Self.recognize(with: recognizer, request: request) { [weak self] text, error, isFinal in
             guard let self, self.run == thisRun else { return }
             if let text { self.model?.replyDraft = self.prefix + text }
+            if let error, let shown = DictationError(recognitionError: error) { self.model?.dictationError = shown }
             if isFinal || error != nil { self.stop() }
         }
         model.isDictating = true
