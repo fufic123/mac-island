@@ -1,4 +1,5 @@
 import AVFoundation
+import Carbon
 import Foundation
 import Speech
 
@@ -76,7 +77,7 @@ final class Dictation {
         }
         // Stopped or restarted while the permission prompts were up.
         guard thisRun == run else { return }
-        guard let recognizer = SFSpeechRecognizer(), recognizer.isAvailable else {
+        guard let recognizer = SFSpeechRecognizer(locale: Self.speechLocale()), recognizer.isAvailable else {
             model.dictationError = DictationError(message: "Speech recognition isn't available right now.")
             return
         }
@@ -128,6 +129,32 @@ final class Dictation {
         request = nil
         task = nil
         if model?.isDictating == true { model?.isDictating = false }
+    }
+
+    /// The language being typed in: the current keyboard layout's (Russian layout, Russian speech),
+    /// else the system's. The system language alone hears Russian as English words.
+    private static func speechLocale() -> Locale {
+        let supported = SFSpeechRecognizer.supportedLocales()
+        var languages: [String] = []
+        if let source = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue(),
+           let raw = TISGetInputSourceProperty(source, kTISPropertyInputSourceLanguages) {
+            let list = Unmanaged<CFArray>.fromOpaque(raw).takeUnretainedValue() as? [String] ?? []
+            languages += list.prefix(1)
+        }
+        languages += Locale.preferredLanguages
+        for language in languages {
+            let wanted = Locale(identifier: language)
+            if supported.contains(wanted) { return wanted }
+            guard let code = wanted.language.languageCode else { continue }
+            let matches = supported.filter { $0.language.languageCode == code }
+            // ru → ru-RU, en → en-US: the language's home region before any other.
+            if let home = matches.first(where: { $0.region?.identifier == code.identifier.uppercased() })
+                ?? matches.first(where: { $0.identifier.hasSuffix("US") })
+                ?? matches.sorted(by: { $0.identifier < $1.identifier }).first {
+                return home
+            }
+        }
+        return Locale.current
     }
 
     // The audio tap and recognizer call back on their own threads. These are nonisolated so the
