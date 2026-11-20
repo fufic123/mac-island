@@ -7,6 +7,7 @@ struct SessionRow: View {
     let height: CGFloat
     let radius: CGFloat
     let isHovered: Bool
+    var showsCost = false
     /// How far the row is swiped left (0 or negative).
     var swipeOffset: CGFloat = 0
     let onFocus: () -> Void
@@ -75,7 +76,8 @@ struct SessionRow: View {
                 if session.wasInterrupted {
                     Glyph(symbol: "stop.circle", color: Crystal.tertiary, size: 17, weight: .medium)
                 } else {
-                    StatusGlyph(status: session.status)
+                    // An unread finish keeps the amethyst glyph after Claude's idle prompt.
+                    StatusGlyph(status: session.isUnseen ? .done : session.status)
                 }
             }
             .frame(width: 18)
@@ -106,7 +108,7 @@ struct SessionRow: View {
                     Text(time)
                         .font(.system(size: 15).monospacedDigit())
                         .foregroundStyle(timeColor)
-                    if let cost = session.cost, cost > 0 {
+                    if showsCost, let cost = session.cost, cost > 0 {
                         Text(DetailPanel.formatCost(cost))
                             .font(.system(size: 12).monospacedDigit())
                             .foregroundStyle(Crystal.tertiary)
@@ -135,7 +137,7 @@ struct SessionRow: View {
 
     private var actionColor: Color {
         if session.status.needsAttention { return Crystal.amberText }
-        if session.status == .done && session.lastMessage != nil { return Crystal.amethystText }
+        if session.isUnseen && session.lastMessage != nil { return Crystal.amethystText }
         return Crystal.secondary
     }
 

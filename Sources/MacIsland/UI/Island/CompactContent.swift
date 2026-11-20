@@ -29,7 +29,7 @@ struct CompactContent: View {
                 }
             Spacer(minLength: 0)
             Bubble(gem: gem, diameter: diameter) {
-                Text("\(model.store.sessions.count)")
+                Text("\(model.activeCount)")
                     .font(.system(size: 12, weight: .semibold).monospacedDigit())
                     .foregroundStyle(gem == .obsidian ? Crystal.secondary : Crystal.text)
             }

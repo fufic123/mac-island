@@ -44,6 +44,7 @@ final class IslandController {
         let hosting = IslandHostingView(rootView: IslandView(
             model: model,
             onFocus: { [weak self] in
+                store.markSeen(sessionId: $0.id)
                 TerminalFocuser.focus($0)
                 self?.dismissAfterAction()
             },
@@ -113,6 +114,7 @@ final class IslandController {
                 store.releaseDeadReplyWaiters()
                 store.refreshCosts()
                 store.discoverSubagents()
+                if Preferences.shared.discoverSessions { store.discoverSessions() }
                 store.save(to: Self.sessionsFile)
                 self?.noticeFirstSession()
                 // The island can grow or shrink under a cursor that isn't moving.

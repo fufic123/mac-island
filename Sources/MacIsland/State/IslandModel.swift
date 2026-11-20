@@ -83,8 +83,8 @@ struct Peek: Equatable {
 final class IslandModel {
     let store: SessionStore
     var isExpanded = false {
-        // A row left open on Remove closes with the island.
-        didSet { if !isExpanded { closeSwipe() } }
+        // A row left open on Remove closes with the island, and so does the idle list.
+        didSet { if !isExpanded { closeSwipe(); showsIdle = false } }
     }
     var peek: Peek?
     var notchWidth: CGFloat = NotchGeometry.fallbackSize.width
@@ -103,8 +103,13 @@ final class IslandModel {
                 replyDraft = ""
                 showsFullMessage = false
             }
+            // Opening a session reads its finished turn.
+            if let selectedSessionId { store.markSeen(sessionId: selectedSessionId) }
         }
     }
+    /// The collapsed "+N idle" row was opened.
+    var showsIdle = false
+    let prefs = Preferences.shared
     /// The reply field has keyboard focus; the island stays open while typing.
     var isComposing = false
     /// Text being typed in the reply field. Cleared when a different session is opened.
@@ -175,6 +180,12 @@ final class IslandModel {
 
     var hasSessions: Bool { !store.sessions.isEmpty }
 
+    /// Sessions worth counting: with idle ones hidden or collapsed, only what runs, waits for
+    /// the user or hasn't been read yet.
+    var activeCount: Int {
+        prefs.idleMode == .show ? store.sessions.count : store.sessions.values.filter { !$0.isQuiet }.count
+    }
+
     /// The collapsed island shows beside the notch when there are sessions, or a lost connection.
     var showsBar: Bool { hasSessions || onboarding == .disconnected }
 
@@ -234,7 +245,9 @@ final class IslandModel {
         if store.isAnyWorking { return .emerald }
         if store.sessions.values.contains(where: { s in
             // finishedAt survives the idle-prompt notification and is cleared by the next prompt.
-            s.finishedAt.map { clock.timeIntervalSince($0) < Self.finishedGlow } ?? false
+            prefs.finishedGlow == .untilOpened
+                ? s.isUnseen
+                : s.finishedAt.map { clock.timeIntervalSince($0) < Self.finishedGlow } ?? false
         }) { return .amethyst }
         return .obsidian
     }

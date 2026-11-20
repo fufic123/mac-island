@@ -221,6 +221,56 @@ MainActor.assumeIsolated {
     check(store.sessions["gone"] == nil, "a removed session ignores late events")
     store.apply(envelope(["session_id": "gone", "hook_event_name": "UserPromptSubmit", "prompt": "again"]))
     check(store.sessions["gone"]?.status == .working, "a removed session returns with a new prompt")
+
+    // A finished turn stays unread, even after Claude's idle prompt, until the session is opened.
+    store.apply(envelope(["session_id": "unread", "hook_event_name": "UserPromptSubmit", "prompt": "go"]))
+    store.apply(envelope(["session_id": "unread", "hook_event_name": "Stop", "last_assistant_message": "All done"]))
+    store.apply(envelope(["session_id": "unread", "hook_event_name": "Notification", "notification_type": "idle_prompt",
+                          "message": "Claude is waiting for your input"]))
+    check(store.sessions["unread"]?.isUnseen == true && store.sessions["unread"]?.displayGroup == .finished,
+          "an unread finish stays under Finished after the idle prompt")
+    store.markSeen(sessionId: "unread", now: Date.now.addingTimeInterval(1))
+    check(store.sessions["unread"]?.isQuiet == true, "once seen it counts as idle")
+
+    // Sessions the hooks missed are found from their transcripts.
+    let tdir = FileManager.default.temporaryDirectory.appendingPathComponent("tr-\(UUID().uuidString)/proj")
+    try! FileManager.default.createDirectory(at: tdir, withIntermediateDirectories: true)
+    let sid = UUID().uuidString.lowercased()
+    let tfile = tdir.appendingPathComponent("\(sid).jsonl")
+    let now = ISO8601DateFormatter().string(from: .now)
+    try! """
+    {"type":"user","cwd":"/tmp/found","gitBranch":"main","entrypoint":"cli","timestamp":"\(now)","message":{"role":"user","content":"fix it"}}
+    {"type":"assistant","cwd":"/tmp/found","timestamp":"\(now)","message":{"stop_reason":"tool_use","content":[{"type":"tool_use"}]}}
+    """.write(to: tfile, atomically: true, encoding: .utf8)
+    var states = TranscriptScanner.recent(within: 60, root: tdir.deletingLastPathComponent())
+    check(states.first?.phase == .working && states.first?.cwd == "/tmp/found", "a working transcript reads as working")
+    store.applyDiscovery(states, processes: [ClaudeProcess(pid: 4242, cwd: "/tmp/found", tty: "ttys009")])
+    check(store.sessions[sid]?.status == .working && store.sessions[sid]?.pid == 4242 && store.sessions[sid]?.discovered == true,
+          "a session without hooks shows up, matched to its claude process")
+    try! """
+    {"type":"user","cwd":"/tmp/found","timestamp":"\(now)","message":{"role":"user","content":"fix it"}}
+    {"type":"assistant","cwd":"/tmp/found","timestamp":"\(now)","message":{"stop_reason":"end_turn","content":[{"type":"text","text":"Fixed."}]}}
+    """.write(to: tfile, atomically: true, encoding: .utf8)
+    states = TranscriptScanner.recent(within: 60, root: tdir.deletingLastPathComponent())
+    store.applyDiscovery(states, processes: [])
+    check(store.sessions[sid]?.status == .done && store.sessions[sid]?.lastMessage == "Fixed." && store.sessions[sid]?.isUnseen == true,
+          "its finished turn is picked up from the transcript")
+    // Bookkeeping lines appended to an old transcript don't make it active.
+    let staleId = UUID().uuidString.lowercased()
+    try! """
+    {"type":"user","cwd":"/tmp/stale","timestamp":"2026-01-01T10:00:00.000Z","message":{"role":"user","content":"old"}}
+    {"type":"session-owner"}
+    """.write(to: tdir.appendingPathComponent("\(staleId).jsonl"), atomically: true, encoding: .utf8)
+    let fresh = TranscriptScanner.recent(within: 60, root: tdir.deletingLastPathComponent())
+    check(!fresh.contains { $0.sessionId == staleId }, "an old transcript touched by bookkeeping isn't recent")
+    // An old conversation with no live process is history, not a session.
+    let old = TranscriptState(sessionId: UUID().uuidString, path: "/x", modified: .now.addingTimeInterval(-600), cwd: "/tmp/old", phase: .done)
+    store.applyDiscovery([old], processes: [])
+    check(store.sessions[old.sessionId] == nil, "a finished transcript without a process isn't added")
+    // A session ended through its hook isn't brought back by its transcript.
+    store.apply(envelope(["session_id": sid, "hook_event_name": "SessionEnd"]))
+    store.applyDiscovery(states, processes: [ClaudeProcess(pid: 4242, cwd: "/tmp/found", tty: nil)])
+    check(store.sessions[sid] == nil, "an ended session stays ended")
 }
 
 print(failures == 0 ? "All checks passed." : "\(failures) check(s) failed.")

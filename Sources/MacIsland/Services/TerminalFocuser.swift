@@ -9,17 +9,62 @@ private let log = Logger(subsystem: "com.fufic123.macisland", category: "focus")
 enum TerminalFocuser {
     static func focus(_ session: AgentSession) {
         log.info("focus \(session.projectName, privacy: .private) term=\(session.termProgram ?? "-", privacy: .public) tty=\(session.tty ?? "-", privacy: .public) pid=\(session.pid ?? -1)")
+        // Sessions found from transcripts (or whose hook didn't pass TERM_PROGRAM / the tty) still
+        // have a pid: the hosting app and the process's terminal tell the same thing.
+        // Claude Desktop opens the exact chat from its claude://code link.
+        if session.termProgram == "claude-desktop", let id = session.desktopSessionId,
+           id.range(of: "^local_[0-9A-Za-z-]{8,64}$", options: .regularExpression) != nil,
+           let url = URL(string: "claude://code/continue?session=\(id)") {
+            NSWorkspace.shared.open(url)
+            log.info("opened Claude Desktop chat")
+            return
+        }
+        let termProgram = session.termProgram ?? session.pid.flatMap(owningBundleId).flatMap(termProgram(forBundle:))
+        let tty = session.tty ?? session.pid.flatMap(ttyName)
         // The tty arrives over the socket, so accept only the "ttysNNN" shape and pass it
         // to AppleScript as an argument rather than splicing it into the source.
-        if let tty = session.tty,
+        if let tty,
            tty.range(of: "^ttys?[0-9]{1,4}$", options: .regularExpression) != nil,
-           let script = tabScript(termProgram: session.termProgram) {
+           let script = tabScript(termProgram: termProgram) {
             runAppleScript(script, argument: "/dev/\(tty)") { ok in
                 if !ok { activateOwningApp(of: session) }
             }
         } else {
             activateOwningApp(of: session)
         }
+    }
+
+    private static func termProgram(forBundle id: String) -> String? {
+        switch id {
+        case "com.apple.Terminal": "Apple_Terminal"
+        case "com.googlecode.iterm2": "iTerm.app"
+        default: nil
+        }
+    }
+
+    /// Bundle id of the GUI app the process runs under.
+    private static func owningBundleId(of pid: pid_t) -> String? {
+        var pid = pid
+        for _ in 0..<20 {
+            if let app = NSRunningApplication(processIdentifier: pid), app.activationPolicy == .regular {
+                return app.bundleIdentifier
+            }
+            guard let parent = parentPid(of: pid) else { return nil }
+            pid = parent
+        }
+        return nil
+    }
+
+    /// The process's controlling terminal, e.g. "ttys004".
+    private static func ttyName(of pid: pid_t) -> String? {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        guard sysctl(&mib, 4, &info, &size, nil, 0) == 0, size > 0 else { return nil }
+        let dev = info.kp_eproc.e_tdev
+        guard dev != -1, dev != 0, let name = devname(dev, S_IFCHR) else { return nil }
+        let s = String(cString: name)
+        return s.hasPrefix("tty") ? s : nil
     }
 
     /// Terminal.app and iTerm2 can select a tab by its tty via AppleScript; the tty is `item 1 of argv`.

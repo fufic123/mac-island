@@ -46,7 +46,7 @@ extension IslandController {
         if phase == .began {
             swipe.reset()
             let onList = model.isExpanded && model.selectedSessionId == nil && model.store.pendingDecisions.isEmpty
-            swipe.sessionId = onList ? model.hoveredSessionId : nil
+            swipe.sessionId = onList && model.hoveredSessionId != SessionsPanel.idleToggleId ? model.hoveredSessionId : nil
             if let id = swipe.sessionId, model.swipeSessionId == id { swipe.base = model.swipeOffset }
             return false
         }

@@ -70,6 +70,8 @@ public struct AgentSession: Identifiable, Sendable, Codable {
     public var termProgram: String?
     /// Chat title, for sessions run by Claude Desktop.
     public var desktopTitle: String?
+    /// Claude Desktop's id for its Code sessions ("local_…"), to open the chat by link.
+    public var desktopSessionId: String?
     public var tty: String?
     public var pid: Int32?
     public var status: SessionStatus = .idle
@@ -124,6 +126,29 @@ public struct AgentSession: Identifiable, Sendable, Codable {
     public var turnStartedAt: Date?
     public var finishedAt: Date?
     public var lastTurnDuration: TimeInterval?
+    /// When the user last looked at the session (opened it, jumped to it, replied).
+    public var seenAt: Date?
+    /// Found from its transcript rather than hook events; its status is read from the transcript
+    /// until a hook event arrives.
+    public var discovered = false
+
+    /// Claude finished a turn the user hasn't looked at yet.
+    public var isUnseen: Bool {
+        guard let finishedAt, status != .working, !status.needsAttention else { return false }
+        return seenAt.map { $0 < finishedAt } ?? true
+    }
+
+    /// The group the session is listed under: a finished turn stays under "Finished" until it's
+    /// seen, even once Claude's idle prompt has turned it idle.
+    public var displayGroup: SessionGroup {
+        if isUnseen { return .finished }
+        // A finished turn that has been read is as quiet as an idle one.
+        if status == .done { return .idle }
+        return status.group
+    }
+
+    /// Nothing running, nothing waiting for the user, nothing unread.
+    public var isQuiet: Bool { displayGroup == .idle }
 
     /// Clicking the row opens it in the island rather than jumping to the terminal. While Claude
     /// is busy the terminal is where things happen, so the click goes there.

@@ -29,7 +29,7 @@ The notch lights up with the state of your sessions, so a glance tells you wheth
 |---|---|
 | Amber | A session needs you: a permission prompt or a question |
 | Emerald | Claude is working (the badge counts running subagents) |
-| Amethyst | A session just finished; stays on for 5 minutes |
+| Amethyst | A session finished and you haven't opened it yet |
 | Off | Everything is idle |
 
 <table>
@@ -55,6 +55,9 @@ The notch lights up with the state of your sessions, so a glance tells you wheth
 - Reply to Claude from the island; the reply lands in the same session. Write while Claude is still working and the message is sent the moment it finishes.
 - Works with Claude Desktop's Code tab too: its sessions show up under their chat titles.
 - Pressing Esc in the terminal is noticed too: the session shows as stopped.
+- Idle sessions fold into a "+N idle" row, so the list shows only what runs, waits for you, or hasn't been read.
+- Sessions the hooks missed (started before the island, or in a client without hooks) are found from Claude Code's transcripts.
+- **Settings…** (⌘, or the Dock icon's menu): show or hide costs (off by default), hide/collapse/show idle sessions, how long the purple light stays on.
 
 ## Install
 

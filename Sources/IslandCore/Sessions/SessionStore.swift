@@ -43,6 +43,10 @@ public final class SessionStore {
     @ObservationIgnored private var dailyCostCheckedAt: Date = .distantPast
     /// All conversations' cost today at API prices.
     public private(set) var todayCost: Double?
+    /// Sessions that ended or whose process died, so transcript discovery doesn't bring them back.
+    @ObservationIgnored private var ended: [String: Date] = [:]
+    @ObservationIgnored private var discoveryRunning = false
+    @ObservationIgnored private var discoveryCheckedAt: Date = .distantPast
 
     /// Finished/idle sessions without a known pid are dropped after this long.
     public static let staleAfter: TimeInterval = 30 * 60
@@ -103,12 +107,15 @@ public final class SessionStore {
         }
         if p.hookEventName == "SessionEnd" {
             sessions[p.sessionId] = nil
+            ended[p.sessionId] = now
             return
         }
 
         // Sessions started before the app launched show up on their first event.
         var s = sessions[p.sessionId] ?? AgentSession(id: p.sessionId, startedAt: now, lastEventAt: now)
         s.lastEventAt = now
+        // Hooks reach the island again: they're the source of truth from here on.
+        s.discovered = false
         // A subagent may run in its own worktree; its cwd and branch aren't the session's, and
         // "Open terminal" must open the main conversation's folder.
         // A worktree subagent's cwd is "<project>/.claude/worktrees/agent-<id>", which also tells
@@ -412,6 +419,7 @@ public final class SessionStore {
         s.canReply = false
         s.queuedReply = nil
         s.suggestion = nil
+        s.seenAt = now
         s.status = .working
         s.activity = "Thinking…"
         s.turnStartedAt = now
@@ -433,6 +441,7 @@ public final class SessionStore {
         if let message = envelope.payload.lastAssistantMessage, !message.isEmpty { s.lastMessage = message }
         if let pid = envelope.claudePid { s.pid = pid }
         s.canReply = true
+        s.discovered = false
         sessions[id] = s
         if let queued = s.queuedReply {
             replyWaiters.removeValue(forKey: id)
@@ -486,8 +495,15 @@ public final class SessionStore {
                 releaseReplyWaiter(for: id)
                 sessions[id] = nil
                 transcriptChecked[id] = nil
+                ended[id] = now
             }
         }
+    }
+
+    /// The user looked at the session: its finished turn no longer counts as unread.
+    public func markSeen(sessionId: String, now: Date = .now) {
+        guard sessions[sessionId]?.isUnseen == true else { return }
+        sessions[sessionId]?.seenAt = now
     }
 
     /// Recomputes each session's cost from its transcripts off the main thread.
@@ -597,6 +613,8 @@ public final class SessionStore {
         for (id, s) in sessions where s.termProgram == "claude-desktop" {
             let title = desktopTitles.title(forSession: id)
             if let title, title != s.desktopTitle { sessions[id]?.desktopTitle = title }
+            let desktopId = desktopTitles.desktopId(forSession: id)
+            if let desktopId, desktopId != s.desktopSessionId { sessions[id]?.desktopSessionId = desktopId }
         }
         for (id, s) in sessions {
             guard let path = s.transcriptPath else { continue }
@@ -616,6 +634,147 @@ public final class SessionStore {
             if updated.subagents.map(\.state) != s.subagents.map(\.state) || updated.subagents.count != s.subagents.count {
                 sessions[id] = updated
             }
+        }
+    }
+
+    // MARK: Session discovery
+
+    /// How far back transcripts are looked at.
+    nonisolated static let discoveryWindow: TimeInterval = 15 * 60
+    /// A transcript with no live Claude process in its folder counts only if written this recently.
+    static let orphanWindow: TimeInterval = 2 * 60
+    /// A hook event this recent means hooks are working for the session; leave it to them.
+    static let hookGrace: TimeInterval = 20
+
+    /// Finds sessions the hooks missed from Claude Code's transcripts and running `claude`
+    /// processes, and corrects sessions whose hook events were lost. Runs off the main thread.
+    public func discoverSessions(now: Date = .now) {
+        guard !discoveryRunning, now.timeIntervalSince(discoveryCheckedAt) > 5 else { return }
+        discoveryCheckedAt = now
+        discoveryRunning = true
+        Task.detached(priority: .utility) {
+            let states = TranscriptScanner.recent(within: Self.discoveryWindow)
+            let processes = ClaudeProcesses.list()
+            await MainActor.run {
+                self.discoveryRunning = false
+                self.applyDiscovery(states, processes: processes)
+            }
+        }
+    }
+
+    /// Folds transcript states into the sessions. Separate from the scan so it can be checked.
+    public func applyDiscovery(_ states: [TranscriptState], processes: [ClaudeProcess], now: Date = .now) {
+        ended = ended.filter { now.timeIntervalSince($0.value) < Self.discoveryWindow * 2 }
+        let claimedPids = Set(sessions.values.compactMap(\.pid))
+        // A discovered session whose transcript has had no message for the whole window is over:
+        // gone without a live process, idle with one.
+        let scanned = Set(states.map(\.sessionId))
+        let livePids = Set(processes.map(\.pid))
+        for (id, s) in sessions where s.discovered && !scanned.contains(id) {
+            if s.pid.map({ !livePids.contains($0) }) ?? true {
+                sessions[id] = nil
+                ended[id] = now
+            } else if s.status == .working {
+                sessions[id]?.status = .idle
+                sessions[id]?.activity = nil
+                sessions[id]?.turnStartedAt = nil
+            }
+        }
+        for state in states {
+            guard dismissed[state.sessionId] == nil, ended[state.sessionId] == nil else { continue }
+            if var s = sessions[state.sessionId] {
+                guard s.discovered || now.timeIntervalSince(s.lastEventAt) > Self.hookGrace else { continue }
+                if s.discovered {
+                    let wasWorking = s.status == .working
+                    Self.fold(state, into: &s, now: now)
+                    if wasWorking, s.status == .done {
+                        onSignal?(.done(sessionId: s.id, project: s.projectName, duration: s.lastTurnDuration,
+                                        summary: ToolDescriber.summary(s.lastMessage)))
+                    }
+                } else {
+                    // Hook session: correct only clear misses. A prompt typed after the last event
+                    // means UserPromptSubmit never arrived; a finished turn after it, a lost Stop.
+                    if s.status != .working, !s.status.needsAttention,
+                       let prompt = state.lastPromptAt, prompt > s.lastEventAt,
+                       now.timeIntervalSince(prompt) < Self.discoveryWindow, state.phase == .working {
+                        s.status = .working
+                        s.activity = "Thinking…"
+                        s.turnStartedAt = prompt
+                        s.finishedAt = nil
+                    } else if s.status == .working, state.phase == .done,
+                              let at = state.lastAt, at > s.lastEventAt {
+                        Self.fold(state, into: &s, now: now)
+                    } else {
+                        continue
+                    }
+                }
+                if sessions[state.sessionId]?.status != s.status || sessions[state.sessionId]?.lastMessage != s.lastMessage {
+                    sessions[state.sessionId] = s
+                }
+                continue
+            }
+            guard let cwd = state.cwd else { continue }
+            let inFolder = processes.filter { $0.cwd == cwd }
+            let live = !inFolder.isEmpty
+            let lastAt = state.lastAt ?? .distantPast
+            guard live || now.timeIntervalSince(lastAt) < Self.orphanWindow else { continue }
+            // A finished or idle conversation without a live process is just history.
+            guard live || state.phase == .working else { continue }
+            var s = AgentSession(id: state.sessionId, startedAt: state.lastPromptAt ?? lastAt, lastEventAt: lastAt)
+            s.discovered = true
+            s.cwd = Self.mainFolder(of: cwd)
+            s.gitBranch = state.gitBranch.flatMap { $0.isEmpty || $0 == "HEAD" ? nil : $0 }
+            s.transcriptPath = state.path
+            if state.entrypoint == "claude-desktop" {
+                s.termProgram = "claude-desktop"
+                s.desktopTitle = desktopTitles.title(forSession: state.sessionId)
+                s.desktopSessionId = desktopTitles.desktopId(forSession: state.sessionId)
+            }
+            // The process is the session's only when it's the one Claude in that folder no other
+            // session has claimed.
+            let free = inFolder.filter { !claimedPids.contains($0.pid) }
+            if free.count == 1 {
+                s.pid = free[0].pid
+                s.tty = free[0].tty
+            }
+            Self.fold(state, into: &s, now: now)
+            // Already finished before the island noticed: nothing new to read.
+            if s.status != .working { s.seenAt = s.finishedAt }
+            sessions[state.sessionId] = s
+            log.info("discovered session from its transcript: \(String(describing: s.status), privacy: .public)")
+        }
+    }
+
+    private static func fold(_ state: TranscriptState, into s: inout AgentSession, now: Date) {
+        if let at = state.lastAt { s.lastEventAt = max(s.lastEventAt, at) }
+        switch state.phase {
+        case .working:
+            if s.status != .working {
+                s.status = .working
+                s.turnStartedAt = state.lastPromptAt ?? state.lastAt ?? now
+                s.finishedAt = nil
+            }
+            s.activity = s.activity ?? "Working"
+            s.wasInterrupted = false
+        case .done:
+            if s.status == .working || s.finishedAt == nil {
+                let at = state.lastAt ?? state.modified
+                s.lastTurnDuration = s.turnStartedAt.map { at.timeIntervalSince($0) }
+                    ?? state.lastPromptAt.map { at.timeIntervalSince($0) }
+                s.finishedAt = at
+                s.turnStartedAt = nil
+            }
+            s.status = s.status == .waitingForInput ? .waitingForInput : .done
+            s.activity = nil
+            if let message = state.lastMessage { s.lastMessage = message }
+        case .interrupted, .idle:
+            if s.status == .working {
+                s.lastTurnDuration = s.turnStartedAt.map { (state.lastAt ?? now).timeIntervalSince($0) }
+                s.turnStartedAt = nil
+            }
+            s.status = .idle
+            s.activity = nil
+            s.wasInterrupted = state.phase == .interrupted
         }
     }
 }

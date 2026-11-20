@@ -65,7 +65,7 @@ struct DetailPanel: View {
                     Text(time)
                         .font(.system(size: 13).monospacedDigit())
                         .foregroundStyle(Crystal.secondary)
-                    if let cost = session.cost, cost > 0 {
+                    if model.prefs.showCost, let cost = session.cost, cost > 0 {
                         Text(Self.formatCost(cost))
                             .font(.system(size: 11).monospacedDigit())
                             .foregroundStyle(Crystal.tertiary)

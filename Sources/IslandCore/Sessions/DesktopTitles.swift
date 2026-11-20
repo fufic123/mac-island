@@ -6,6 +6,7 @@ import Foundation
 final class DesktopTitles: @unchecked Sendable {
     private let root: URL
     private var titles: [String: String] = [:]
+    private var desktopIds: [String: String] = [:]
     private var checked: [URL: Date] = [:]
 
     init(root: URL = FileManager.default.homeDirectoryForCurrentUser
@@ -19,6 +20,12 @@ final class DesktopTitles: @unchecked Sendable {
         return titles[id]
     }
 
+    /// Claude Desktop's own id for the session ("local_…"), which its claude://code links take.
+    func desktopId(forSession id: String) -> String? {
+        refresh()
+        return desktopIds[id]
+    }
+
     private func refresh() {
         let fm = FileManager.default
         guard let enumerator = fm.enumerator(at: root, includingPropertiesForKeys: [.contentModificationDateKey],
@@ -29,8 +36,9 @@ final class DesktopTitles: @unchecked Sendable {
             checked[url] = modified
             guard let data = try? Data(contentsOf: url),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let id = json["cliSessionId"] as? String,
-                  let title = (json["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  let id = json["cliSessionId"] as? String else { continue }
+            if let desktopId = json["sessionId"] as? String { desktopIds[id] = desktopId }
+            guard let title = (json["title"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !title.isEmpty else { continue }
             titles[id] = title
         }
