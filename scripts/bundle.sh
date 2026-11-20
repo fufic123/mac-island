@@ -32,6 +32,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>NSHighResolutionCapable</key><true/>
     <key>LSApplicationCategoryType</key><string>public.app-category.developer-tools</string>
     <key>NSAppleEventsUsageDescription</key><string>Mac Island switches to the terminal tab running the Claude session you click.</string>
+    <key>NSMicrophoneUsageDescription</key><string>Mac Island listens while you dictate a reply to Claude.</string>
+    <key>NSSpeechRecognitionUsageDescription</key><string>Mac Island turns your dictated reply to Claude into text.</string>
 </dict>
 </plist>
 PLIST

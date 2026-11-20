@@ -296,12 +296,12 @@ final class IslandController {
             expandWork?.cancel()
             expandWork = nil
             // Stay open while typing a reply or on a first-run screen, even if the cursor wanders off.
-            guard model.isExpanded, !model.isComposing, !model.isPinnedOpen, collapseWork == nil else { return }
+            guard model.isExpanded, !model.holdsOpen, !model.isPinnedOpen, collapseWork == nil else { return }
             let work = DispatchWorkItem { [weak self] in
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     self.collapseWork = nil
-                    guard !self.model.isComposing, !self.model.isPinnedOpen else { return }
+                    guard !self.model.holdsOpen, !self.model.isPinnedOpen else { return }
                     self.model.isExpanded = false
                     self.model.selectedSessionId = nil
                     self.reshowConnectedPeek()

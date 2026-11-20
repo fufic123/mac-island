@@ -154,37 +154,60 @@ struct DetailPanel: View {
 
                     if session.queuedReply == nil {
                         // The system placeholder is near-black on this dark field, so draw our own.
-                        TextField("", text: draft, axis: .vertical)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 14))
-                            .foregroundStyle(Crystal.text)
-                            .background(alignment: .leading) {
-                                if model.replyDraft.isEmpty {
-                                    Text(session.canReply ? "Reply to Claude…" : session.status == .working ? "Message Claude when it finishes…" : "Message Claude…")
-                                        .font(.system(size: 14))
-                                        .foregroundStyle(Crystal.tertiary)
-                                        .allowsHitTesting(false)
+                        HStack(alignment: .bottom, spacing: 8) {
+                            TextField("", text: draft, axis: .vertical)
+                                .textFieldStyle(.plain)
+                                .font(.system(size: 14))
+                                .foregroundStyle(Crystal.text)
+                                .background(alignment: .leading) {
+                                    if model.replyDraft.isEmpty {
+                                        Text(session.canReply ? "Reply to Claude…" : session.status == .working ? "Message Claude when it finishes…" : "Message Claude…")
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(Crystal.tertiary)
+                                            .allowsHitTesting(false)
+                                    }
+                                }
+                                .lineLimit(1...5)
+                                // No autocorrect or Writing Tools: their popovers can't draw in a panel
+                                // whose app is never active and show up as an empty grey box.
+                                .autocorrectionDisabled()
+                                .modifier(NoWritingTools())
+                                .focused($fieldFocused)
+                                .onSubmit(send)
+                                .onExitCommand {
+                                    model.dictation.stop()
+                                    fieldFocused = false
+                                    model.selectedSessionId = nil
+                                }
+                                .padding(.vertical, 11)
+                            MicButton(isOn: model.isDictating) { model.dictation.toggle() }
+                                .padding(.vertical, 5)
+                        }
+                        .padding(.leading, 14)
+                        .padding(.trailing, 5)
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Crystal.codeBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .strokeBorder(fieldFocused || model.isDictating ? Crystal.amethyst.opacity(0.55) : .clear, lineWidth: 1.5)
+                        )
+                        .padding(.top, 16)
+
+                        if let error = model.dictationError {
+                            HStack(spacing: 8) {
+                                Text(error.message)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Crystal.rubyText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                if let url = error.settingsURL {
+                                    Button("Open Settings") { NSWorkspace.shared.open(url) }
+                                        .buttonStyle(.plain)
+                                        .pointingHand()
+                                        .font(.system(size: 12, weight: .medium))
+                                        .foregroundStyle(Crystal.amethystText)
                                 }
                             }
-                            .lineLimit(1...5)
-                            // No autocorrect or Writing Tools: their popovers can't draw in a panel
-                            // whose app is never active and show up as an empty grey box.
-                            .autocorrectionDisabled()
-                            .modifier(NoWritingTools())
-                            .focused($fieldFocused)
-                            .onSubmit(send)
-                            .onExitCommand {
-                                fieldFocused = false
-                                model.selectedSessionId = nil
-                            }
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 11)
-                            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Crystal.codeBackground))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .strokeBorder(fieldFocused ? Crystal.amethyst.opacity(0.55) : .clear, lineWidth: 1.5)
-                            )
-                            .padding(.top, 16)
+                            .padding(.top, 8)
+                        }
                     }
 
                     if session.queuedReply == nil {
@@ -226,6 +249,8 @@ struct DetailPanel: View {
     }
 
     private func send() {
+        // Stop listening first so a late result can't refill the field after it's sent.
+        model.dictation.stop()
         guard canSend else { return }
         let text = model.replyDraft
         model.replyDraft = ""
@@ -289,6 +314,27 @@ struct DetailPanel: View {
             Clock.format(now.timeIntervalSince(session.permissionRequestedAt ?? session.lastEventAt))
         case .done, .waitingForInput, .idle: Clock.format(session.stoppedTime)
         }
+    }
+}
+
+/// Turns dictation on and off; lit and pulsing while it listens.
+private struct MicButton: View {
+    let isOn: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: isOn ? "mic.fill" : "mic")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isOn ? Color(hex: 0x170B33) : Crystal.secondary)
+                .symbolEffect(.pulse, isActive: isOn)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(isOn ? Crystal.amethyst : Crystal.button))
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .pointingHand()
+        .accessibilityLabel(isOn ? "Stop dictation" : "Dictate")
     }
 }
 
