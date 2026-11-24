@@ -24,12 +24,14 @@ struct IslandView: View {
                                                    style: .continuous)
             let bodyWidth = fillsNotch ? model.notchWidth : size.width
             let bodyHeight = fillsNotch ? model.notchHeight : size.height
+            // Collapsed, the island is only the notch: plain black in either design, no glass.
+            let glassBody = Theme.isGlass && !fillsNotch
             let shadowOpacity = model.mode == .compact ? 0 : (Theme.isGlass ? 0.4 : 0.55)
             ZStack {
                 bodyShape
                     .fill(.black)
                     .shadow(color: .black.opacity(shadowOpacity), radius: model.mode == .panel ? 25 : 20, y: model.mode == .panel ? 22 : 16)
-                if Theme.isGlass {
+                if glassBody {
                     // Glass is see-through: keep only the shadow outside it.
                     bodyShape.fill(.black).blendMode(.destinationOut)
                 }
@@ -38,7 +40,7 @@ struct IslandView: View {
                 .padding(shadowPad)
                 .drawingGroup()
                 .padding(-shadowPad)
-            if Theme.isGlass {
+            if glassBody {
                 GlassBody(radius: bodyRadius, notchHeight: model.notchHeight, gem: model.mode == .peek ? (model.peek?.gem ?? model.stateGem) : model.stateGem,
                           animates: model.mode != .compact)
                     .frame(width: bodyWidth, height: bodyHeight)

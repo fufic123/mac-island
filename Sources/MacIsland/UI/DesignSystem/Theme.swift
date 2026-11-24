@@ -187,6 +187,7 @@ struct GlassBody: View {
                 .drawingGroup()
             } else {
                 DesktopBlur(radius: radius)
+                    .allowsHitTesting(false)
             }
             // Smoke: keeps text legible over any wallpaper, light or busy.
             LinearGradient(colors: [.black.opacity(0.58), .black.opacity(0.5)], startPoint: .top, endPoint: .bottom)
@@ -211,6 +212,7 @@ struct GlassBody: View {
         }
         .clipShape(shape)
         .compositingGroup()
+        .allowsHitTesting(false)
     }
 }
 
@@ -237,6 +239,8 @@ struct GlassRim: View {
                         lineWidth: 1)
                 .blendMode(.plusLighter)
         }
+        // A masked gradient still takes clicks over its whole frame, which is the whole panel.
+        .allowsHitTesting(false)
     }
 }
 
@@ -255,6 +259,7 @@ struct LiquidRim: View {
         } else {
             LiquidGradient(palette: Liquid.palette(gem), fps: fps, speed: 0.18)
                 .mask(shape.stroke(lineWidth: lineWidth))
+                .allowsHitTesting(false)
         }
     }
 }
