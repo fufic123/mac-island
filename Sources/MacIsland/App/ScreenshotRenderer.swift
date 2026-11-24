@@ -194,6 +194,7 @@ enum ScreenshotRenderer {
             ZStack(alignment: .top) {
                 desktop
                 island.frame(width: model.windowSize.width, height: model.windowSize.height)
+                    .environment(\.drawsStatically, true)
                     // Offscreen there is no window server blur; the glass blurs the wallpaper itself.
                     .environment(\.glassBackdrop, design == .liquidGlass ? AnyView(desktop.frame(width: size.width, height: size.height)) : nil)
             }

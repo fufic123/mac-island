@@ -39,17 +39,7 @@ struct Rim: View {
     var body: some View {
         let shape = IslandRimShape(radius: radius, inset: lineWidth / 2)
         if gem.flows && !reduceMotion {
-            TimelineView(.animation(minimumInterval: 1 / 30)) { context in
-                let t = context.date.timeIntervalSinceReferenceDate
-                let phase = (t / gem.period).truncatingRemainder(dividingBy: 1)
-                GeometryReader { geo in
-                    let w = geo.size.width
-                    LinearGradient(stops: gem.rimStops, startPoint: .leading, endPoint: .trailing)
-                        .frame(width: w * 2, height: geo.size.height)
-                        .offset(x: -w + phase * w)
-                }
-                .mask(shape.stroke(lineWidth: lineWidth))
-            }
+            FlowingRim(radius: radius, lineWidth: lineWidth, stops: gem.rimStops, period: gem.period)
         } else {
             shape.stroke(gem.color, lineWidth: lineWidth)
         }

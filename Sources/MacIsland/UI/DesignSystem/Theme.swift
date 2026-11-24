@@ -26,6 +26,13 @@ enum Liquid {
         }
     }
 
+    /// The palette twice over, evenly spaced, for a rim that slides one width per loop.
+    static func rimStops(_ gem: Gem) -> [Gradient.Stop] {
+        let colors = palette(gem)
+        let cycle = colors + colors + [colors[0]]
+        return cycle.enumerated().map { Gradient.Stop(color: $1, location: CGFloat($0) / CGFloat(cycle.count - 1)) }
+    }
+
     /// The palette for a button whose flat Crystal fill is `color`, or nil for neutral fills.
     static func palette(matching color: Color) -> [Color]? {
         switch color {
@@ -147,9 +154,13 @@ private struct DesktopBlurView: NSViewRepresentable {
         }
     }
 
+    /// Masks made so far by radius: the radius changes every frame of a morph.
+    nonisolated(unsafe) private static var masks: [CGFloat: NSImage] = [:]
+
     /// Stretchable mask: square top, rounded bottom corners.
     private static func mask(radius: CGFloat) -> NSImage {
         let r = max(1, radius)
+        if let cached = masks[r] { return cached }
         let side = r * 2 + 1
         let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
             NSColor.black.setFill()
@@ -159,6 +170,7 @@ private struct DesktopBlurView: NSViewRepresentable {
         }
         image.capInsets = NSEdgeInsets(top: r, left: r, bottom: r, right: r)
         image.resizingMode = .stretch
+        masks[r] = image
         return image
     }
 }
@@ -186,7 +198,10 @@ struct GlassBody: View {
                 // Rasterized, so the blur also shows in offscreen captures.
                 .drawingGroup()
             } else {
+                // Collapsed it would only sit under the black; hidden, it stays in place to grow
+                // with the island when it opens.
                 DesktopBlur(radius: radius)
+                    .opacity(animates ? 1 : 0)
                     .allowsHitTesting(false)
             }
             // Smoke: keeps text legible over any wallpaper, light or busy.
@@ -197,11 +212,14 @@ struct GlassBody: View {
                                      startPoint: .top, endPoint: .bottom))
                 .blendMode(.plusLighter)
             // Over the notch it must stay opaque black so it merges with the hardware.
-            VStack(spacing: 0) {
-                Color.black.frame(height: notchHeight)
-                LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom)
-                    .frame(height: 18)
-                Spacer(minLength: 0)
+            // An overlay, so it never makes the body taller than the island: collapsed, the island is
+            // only notch-high, and a taller body pushed the blur out under it as a grey band.
+            Color.clear.overlay(alignment: .top) {
+                VStack(spacing: 0) {
+                    Color.black.frame(height: notchHeight)
+                    LinearGradient(colors: [.black, .black.opacity(0)], startPoint: .top, endPoint: .bottom)
+                        .frame(height: 18)
+                }
             }
             // Soft inner glow along the glass's edge, as light caught in its thickness.
             // Collapsed, the body is only the notch and stays pure black.
@@ -245,11 +263,10 @@ struct GlassRim: View {
 }
 
 /// Rim of the collapsed island or a peek in Liquid Glass: the state's liquid colour flowing
-/// slowly through the line. Collapsed, it redraws only a few times a second.
+/// slowly through the line, played by Core Animation.
 struct LiquidRim: View {
     let gem: Gem
     let radius: CGFloat
-    let fps: Double
 
     var body: some View {
         let lineWidth: CGFloat = gem == .obsidian ? 1 : 2
@@ -257,9 +274,7 @@ struct LiquidRim: View {
         if gem == .obsidian {
             shape.stroke(.white.opacity(0.2), lineWidth: lineWidth)
         } else {
-            LiquidGradient(palette: Liquid.palette(gem), fps: fps, speed: 0.18)
-                .mask(shape.stroke(lineWidth: lineWidth))
-                .allowsHitTesting(false)
+            FlowingRim(radius: radius, lineWidth: lineWidth, stops: Liquid.rimStops(gem), period: 6)
         }
     }
 }

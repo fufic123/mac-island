@@ -24,8 +24,9 @@ struct IslandView: View {
                                                    style: .continuous)
             let bodyWidth = fillsNotch ? model.notchWidth : size.width
             let bodyHeight = fillsNotch ? model.notchHeight : size.height
-            // Collapsed, the island is only the notch: plain black in either design, no glass.
-            let glassBody = Theme.isGlass && !fillsNotch
+            // The glass stays through every mode so it grows out of the notch instead of popping in;
+            // collapsed it shows only black.
+            let glassBody = Theme.isGlass
             let shadowOpacity = model.mode == .compact ? 0 : (Theme.isGlass ? 0.4 : 0.55)
             ZStack {
                 bodyShape
@@ -123,8 +124,7 @@ struct IslandView: View {
                     .transition(.opacity)
                 Group {
                     if Theme.isGlass {
-                        // Collapsed it's always on screen, so the liquid only drifts a few frames a second.
-                        LiquidRim(gem: gem, radius: rimRadius, fps: tracesNotch ? 8 : 20)
+                        LiquidRim(gem: gem, radius: rimRadius)
                     } else {
                         Rim(gem: gem, radius: rimRadius)
                     }

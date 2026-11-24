@@ -46,7 +46,7 @@ struct CompactContent: View {
                 && !model.store.sessions.values.contains { $0.status == .needsPermission }
             Glyph(symbol: question ? "questionmark.bubble" : "lock", color: Crystal.amber, size: 13)
         case .emerald:
-            Equalizer().scaleEffect(0.85)
+            LayerEqualizer(scale: 0.85)
         case .amethyst:
             Glyph(symbol: "sparkle", color: Crystal.amethyst, size: 13)
         case .ruby:
