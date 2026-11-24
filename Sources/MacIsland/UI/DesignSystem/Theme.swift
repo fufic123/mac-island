@@ -205,7 +205,7 @@ struct GlassBody: View {
                     .allowsHitTesting(false)
             }
             // Smoke: keeps text legible over any wallpaper, light or busy.
-            LinearGradient(colors: [.black.opacity(0.58), .black.opacity(0.5)], startPoint: .top, endPoint: .bottom)
+            LinearGradient(colors: [.black.opacity(0.66), .black.opacity(0.6)], startPoint: .top, endPoint: .bottom)
             LiquidGradient(palette: Liquid.palette(gem), fps: 15, paused: !animates, speed: 0.06)
                 .opacity(animates ? (gem == .obsidian ? 0.10 : 0.2) : 0)
                 .mask(LinearGradient(stops: [.init(color: .clear, location: 0.35), .init(color: .black, location: 1)],

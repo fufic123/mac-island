@@ -6,8 +6,9 @@ enum Crystal {
     static let text = Color(hex: 0xF5F5F7)
     static let body = Color(hex: 0xD1D1D6)
     // Surfaces and the dimmer text switch with the design (see Theme); the rest is shared.
-    static var secondary: Color { Theme.isGlass ? Color(hex: 0xB9B9C0) : Color(hex: 0xA1A1A6) }
-    static var tertiary: Color { Theme.isGlass ? Color(hex: 0x9C9CA4) : Color(hex: 0x8E8E93) }
+    // Glass shows the wallpaper through it, so its dimmer text stays much brighter to read.
+    static var secondary: Color { Theme.isGlass ? Color(hex: 0xD8D8DE) : Color(hex: 0xA1A1A6) }
+    static var tertiary: Color { Theme.isGlass ? Color(hex: 0xBDBDC6) : Color(hex: 0x8E8E93) }
     static var rowHover: Color { Theme.isGlass ? .white.opacity(0.08) : Color(hex: 0x1C1C1E) }
     static var codeBackground: Color { Theme.isGlass ? .black.opacity(0.34) : Color(hex: 0x161618) }
     static var button: Color { Theme.isGlass ? .white.opacity(0.11) : Color(hex: 0x232326) }
