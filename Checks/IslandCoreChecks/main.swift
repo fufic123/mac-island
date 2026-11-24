@@ -63,6 +63,37 @@ func run() {
         store.discoverSubagents(now: Date.now.addingTimeInterval(31 * 60))
         check(store.sessions["s1"]?.subagents.first { $0.task == "Watch CI" }?.state == .stopped,
               "a subagent silent for half an hour is no longer running")
+
+        // Claude Code's newer subagents end by handing their result back, not with end_turn.
+        let handback = [
+            #"{"type":"assistant","message":{"stop_reason":"tool_use","content":[{"type":"tool_use","id":"h1","name":"SubagentHandback","input":{}}]}}"#,
+            #"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"h1","content":"ok"}]}}"#,
+        ].joined(separator: "\n")
+        try! #"{"description":"Hand back"}"#.write(to: subagents.appendingPathComponent("agent-b3.meta.json"), atomically: true, encoding: .utf8)
+        try! handback.write(to: subagents.appendingPathComponent("agent-b3.jsonl"), atomically: true, encoding: .utf8)
+        // …or metadata says so.
+        try! #"{"description":"Meta done","finished":true}"#.write(to: subagents.appendingPathComponent("agent-b4.meta.json"), atomically: true, encoding: .utf8)
+        try! #"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"x","content":"ok"}]}}"#
+            .write(to: subagents.appendingPathComponent("agent-b4.jsonl"), atomically: true, encoding: .utf8)
+        // …or the user stopped it.
+        try! #"{"description":"Stopped"}"#.write(to: subagents.appendingPathComponent("agent-b5.meta.json"), atomically: true, encoding: .utf8)
+        try! #"{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user]"}]}}"#
+            .write(to: subagents.appendingPathComponent("agent-b5.jsonl"), atomically: true, encoding: .utf8)
+        // A plain tool result means it's still working.
+        try! #"{"description":"Busy"}"#.write(to: subagents.appendingPathComponent("agent-b6.meta.json"), atomically: true, encoding: .utf8)
+        try! #"{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"x","content":"ok"}]}}"#
+            .write(to: subagents.appendingPathComponent("agent-b6.jsonl"), atomically: true, encoding: .utf8)
+        let infos = Dictionary(uniqueKeysWithValues: Transcript.subagents(sessionTranscript: dir.appendingPathComponent("s1.jsonl").path).map { ($0.id, $0) })
+        check(infos["b3"]?.finished == true, "a subagent that handed back is finished")
+        check(infos["b4"]?.finished == true, "a subagent marked finished in its metadata is finished")
+        check(infos["b5"]?.interrupted == true && infos["b5"]?.finished == false, "an interrupted subagent is stopped")
+        check(infos["b6"]?.finished == false && infos["b6"]?.interrupted == false, "a subagent mid-tool is still running")
+        let fresh = SessionStore()
+        fresh.apply(envelope(["hook_event_name": "PreToolUse", "tool_name": "Bash",
+                              "transcript_path": dir.appendingPathComponent("s1.jsonl").path]))
+        fresh.discoverSubagents()
+        let running = fresh.sessions["s1"]?.subagents.filter { $0.state == .running }.compactMap(\.task) ?? []
+        check(Set(running) == ["Busy", "Watch CI"], "only working subagents is listed as running (got \(running))")
     }
     do {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("sessions-\(UUID().uuidString).json")

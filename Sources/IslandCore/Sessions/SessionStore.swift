@@ -620,7 +620,8 @@ public final class SessionStore {
             guard let path = s.transcriptPath else { continue }
             var updated = s
             for info in Transcript.subagents(sessionTranscript: path) {
-                let alive = !info.finished && now.timeIntervalSince(info.modified) < Self.subagentQuietLimit
+                let alive = !info.finished && !info.interrupted
+                    && now.timeIntervalSince(info.modified) < Self.subagentQuietLimit
                 if let i = updated.subagents.firstIndex(where: { $0.id == info.id }) {
                     guard updated.subagents[i].state == .running, !alive else { continue }
                     updated.subagents[i].state = info.finished ? .done : .stopped
