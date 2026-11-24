@@ -19,18 +19,30 @@ struct IslandView: View {
             // In compact the black is only the notch, so the circles beside it float over the menu bar;
             // it grows into the island when it opens.
             let fillsNotch = model.mode == .compact
-            UnevenRoundedRectangle(
-                bottomLeadingRadius: fillsNotch ? IslandModel.notchCornerRadius : radius,
-                bottomTrailingRadius: fillsNotch ? IslandModel.notchCornerRadius : radius,
-                style: .continuous
-            )
-                .fill(.black)
-                .frame(width: fillsNotch ? model.notchWidth : size.width,
-                       height: fillsNotch ? model.notchHeight : size.height)
-                .shadow(color: .black.opacity(model.mode == .compact ? 0 : 0.55), radius: model.mode == .panel ? 25 : 20, y: model.mode == .panel ? 22 : 16)
+            let bodyRadius = fillsNotch ? IslandModel.notchCornerRadius : radius
+            let bodyShape = UnevenRoundedRectangle(bottomLeadingRadius: bodyRadius, bottomTrailingRadius: bodyRadius,
+                                                   style: .continuous)
+            let bodyWidth = fillsNotch ? model.notchWidth : size.width
+            let bodyHeight = fillsNotch ? model.notchHeight : size.height
+            let shadowOpacity = model.mode == .compact ? 0 : (Theme.isGlass ? 0.4 : 0.55)
+            ZStack {
+                bodyShape
+                    .fill(.black)
+                    .shadow(color: .black.opacity(shadowOpacity), radius: model.mode == .panel ? 25 : 20, y: model.mode == .panel ? 22 : 16)
+                if Theme.isGlass {
+                    // Glass is see-through: keep only the shadow outside it.
+                    bodyShape.fill(.black).blendMode(.destinationOut)
+                }
+            }
+                .frame(width: bodyWidth, height: bodyHeight)
                 .padding(shadowPad)
                 .drawingGroup()
                 .padding(-shadowPad)
+            if Theme.isGlass {
+                GlassBody(radius: bodyRadius, notchHeight: model.notchHeight, gem: model.mode == .peek ? (model.peek?.gem ?? model.stateGem) : model.stateGem,
+                          animates: model.mode != .compact)
+                    .frame(width: bodyWidth, height: bodyHeight)
+            }
             // Content is laid out once at its final size and only revealed by the animating
             // silhouette, instead of being re-laid-out (scroll view and all) on every frame.
             content
@@ -54,6 +66,8 @@ struct IslandView: View {
         .animation(Crystal.expand, value: model.panelBodyHeight)
         .animation(Crystal.expand, value: model.showsBar)
         .foregroundStyle(Crystal.text)
+        // Rebuild everything when the design changes, so every token is read afresh.
+        .id(model.prefs.design)
     }
 
     /// Carries its own animation, since the content's layout transaction is not animated.
@@ -100,17 +114,53 @@ struct IslandView: View {
                 IslandRimShape(radius: rimRadius, inset: line / 2)
                     .stroke(.black.opacity(0.55), lineWidth: line * 3.5)
                     .blur(radius: 2)
+                    // Glass: only outside, since inside it would draw a dark ring on the glass.
+                    .mask(OutsideMask(radius: rimRadius, inverted: Theme.isGlass && !tracesNotch).fill(style: FillStyle(eoFill: true)))
                     .frame(width: rimSize.width, height: rimSize.height)
                     .opacity(model.mode == .panel ? 0 : 1)
                     .transition(.opacity)
-                Rim(gem: gem, radius: rimRadius)
+                Group {
+                    if Theme.isGlass {
+                        // Collapsed it's always on screen, so the liquid only drifts a few frames a second.
+                        LiquidRim(gem: gem, radius: rimRadius, fps: tracesNotch ? 8 : 20)
+                    } else {
+                        Rim(gem: gem, radius: rimRadius)
+                    }
+                }
                     .frame(width: rimSize.width, height: rimSize.height)
                     .opacity(model.mode == .panel ? 0 : 1)
                     .transition(.opacity)
             }
-            LitBorder(gem: model.stateGem, radius: radius)
-                .opacity(model.mode == .panel ? 1 : 0)
+            if Theme.isGlass {
+                if model.mode != .compact {
+                    GlassRim(gem: model.stateGem, radius: radius, animates: model.mode == .panel)
+                        .opacity(model.mode == .panel ? 1 : 0)
+                }
+            } else {
+                LitBorder(gem: model.stateGem, radius: radius)
+                    .opacity(model.mode == .panel ? 1 : 0)
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+}
+
+/// Everything around the island (and under it unless `inverted` is false, which masks nothing).
+private struct OutsideMask: Shape {
+    var radius: CGFloat
+    var inverted: Bool
+
+    var animatableData: CGFloat {
+        get { radius }
+        set { radius = newValue }
+    }
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path(rect.insetBy(dx: -40, dy: -40))
+        if inverted {
+            p.addPath(UnevenRoundedRectangle(bottomLeadingRadius: radius, bottomTrailingRadius: radius, style: .continuous)
+                .path(in: rect.insetBy(dx: 0, dy: -1).offsetBy(dx: 0, dy: -1)))
+        }
+        return p
     }
 }

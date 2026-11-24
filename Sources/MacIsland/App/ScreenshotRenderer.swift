@@ -4,18 +4,36 @@ import SwiftUI
 
 /// Renders the island's screens with demo sessions to PNGs for the README:
 /// `MacIsland --render-screenshots <folder>`. Draws offscreen, so it needs no screen-recording
-/// permission and never touches real sessions or hooks.
+/// permission and never touches real sessions or hooks. Each shot is drawn in Crystal and again
+/// in Liquid Glass (`-glass`), the latter over a colourful wallpaper that its glass blurs.
 @MainActor
 enum ScreenshotRenderer {
     static func run(into folder: URL) {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        for shot in shots() {
-            let url = folder.appendingPathComponent("\(shot.name).png")
-            if let png = render(shot.model) {
-                try? png.write(to: url)
-                print("wrote \(url.path)")
+        // Load the saved preferences first: they set the design, which each pass then overrides.
+        let saved = Preferences.shared.design
+        for design in Design.allCases {
+            Theme.design = design
+            var all = shots()
+            if design == .liquidGlass {
+                let compact = IslandModel(store: demoStore())
+                all.append(Shot(name: "feature-compact", model: compact))
+                let send = demoStore()
+                waitForReply(send, "docs")
+                let sendModel = expanded(send, selected: "docs")
+                sendModel.replyDraft = "Yes, add it"
+                all.append(Shot(name: "feature-send", model: sendModel))
+            }
+            for shot in all {
+                let suffix = design == .liquidGlass ? "-glass" : ""
+                let url = folder.appendingPathComponent("\(shot.name)\(suffix).png")
+                if let png = render(shot.model, design: design) {
+                    try? png.write(to: url)
+                    print("wrote \(url.path)")
+                }
             }
         }
+        Theme.design = saved
     }
 
     private struct Shot {
@@ -85,6 +103,24 @@ enum ScreenshotRenderer {
         return shots
     }
 
+    /// A wallpaper in the spirit of macOS's: soft, saturated colour fields under a light menu bar.
+    private static func wallpaper(_ size: CGSize, menuBarHeight: CGFloat) -> some View {
+        ZStack(alignment: .top) {
+            LinearGradient(colors: [Color(hex: 0x1B3B8F), Color(hex: 0x5A2A86), Color(hex: 0xD0577A)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            // Radial fields rather than blurred shapes: offscreen captures skip blur filters.
+            RadialGradient(colors: [Color(hex: 0x3FB6FF), Color(hex: 0x3FB6FF, opacity: 0)],
+                           center: UnitPoint(x: 0.18, y: 0.45), startRadius: 0, endRadius: 330)
+            RadialGradient(colors: [Color(hex: 0xFF9A4D), Color(hex: 0xFF9A4D, opacity: 0)],
+                           center: UnitPoint(x: 0.85, y: 0.95), startRadius: 0, endRadius: 320)
+            RadialGradient(colors: [Color(hex: 0x7CF2C8, opacity: 0.9), Color(hex: 0x7CF2C8, opacity: 0)],
+                           center: UnitPoint(x: 0.62, y: 0.22), startRadius: 0, endRadius: 220)
+            Rectangle().fill(Color.white.opacity(0.28)).frame(height: menuBarHeight)
+        }
+        .frame(width: size.width, height: size.height)
+        .clipped()
+    }
+
     /// Three sessions: one working with two subagents, one finished, one idle.
     private static func demoStore() -> SessionStore {
         let store = SessionStore()
@@ -141,16 +177,25 @@ enum ScreenshotRenderer {
         return model
     }
 
-    /// The island over a dark desktop with a menu bar, cropped to the island.
-    private static func render(_ model: IslandModel) -> Data? {
+    /// The island over a desktop with a menu bar, cropped to the island: dark for Crystal, a
+    /// colourful wallpaper for Liquid Glass so its glass has something to show.
+    private static func render(_ model: IslandModel, design: Design) -> Data? {
         let island = IslandView(model: model, onFocus: { _ in }, onDecide: { _, _, _ in }, onReply: { _, _ in },
                                 onOnboarding: { _ in })
         let width = IslandModel.panelWidth + 160
-        let host = NSHostingView(rootView: AnyView(
-            ZStack(alignment: .top) {
+        let size = CGSize(width: width, height: model.windowSize.height)
+        let desktop = design == .liquidGlass
+            ? AnyView(wallpaper(size, menuBarHeight: model.notchHeight))
+            : AnyView(ZStack(alignment: .top) {
                 LinearGradient(colors: [Color(hex: 0x2B2F45), Color(hex: 0x15161D)], startPoint: .top, endPoint: .bottom)
                 Rectangle().fill(Color(hex: 0x1D1E26)).frame(height: model.notchHeight)
+            })
+        let host = NSHostingView(rootView: AnyView(
+            ZStack(alignment: .top) {
+                desktop
                 island.frame(width: model.windowSize.width, height: model.windowSize.height)
+                    // Offscreen there is no window server blur; the glass blurs the wallpaper itself.
+                    .environment(\.glassBackdrop, design == .liquidGlass ? AnyView(desktop.frame(width: size.width, height: size.height)) : nil)
             }
             .frame(width: width, height: model.windowSize.height)
             .environment(\.colorScheme, .dark)

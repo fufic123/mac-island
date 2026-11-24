@@ -55,6 +55,7 @@ struct PermissionPanel: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Crystal.codeBackground))
+                    .glassEdge(RoundedRectangle(cornerRadius: 14, style: .continuous), strength: 0.45)
                     .padding(.top, 14)
 
                     if let reason = session.permissionReason {

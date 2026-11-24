@@ -42,6 +42,7 @@ struct DetailPanel: View {
                         .foregroundStyle(model.hoversOpenButton ? Crystal.text : Crystal.secondary)
                         .frame(width: 30, height: 30)
                         .background(Circle().fill(model.hoversOpenButton ? Crystal.keyCap : Crystal.button))
+                        .glassEdge(Circle())
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
@@ -180,6 +181,7 @@ struct DetailPanel: View {
                             .padding(.horizontal, 14)
                             .padding(.vertical, 11)
                             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Crystal.codeBackground))
+                            .glassEdge(RoundedRectangle(cornerRadius: 14, style: .continuous), strength: 0.45)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                                     .strokeBorder(fieldFocused ? Crystal.amethyst.opacity(0.55) : .clear, lineWidth: 1.5)

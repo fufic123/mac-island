@@ -26,6 +26,7 @@ struct SessionRow: View {
             }
         }
         .background(RoundedRectangle(cornerRadius: radius, style: .continuous).fill(isHovered ? Crystal.rowHover : .clear))
+        .glassEdge(RoundedRectangle(cornerRadius: radius, style: .continuous), strength: 0.6, visible: isHovered)
         .contentShape(Rectangle())
         .onTapGesture(perform: onFocus)
         .pointingHand()

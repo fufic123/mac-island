@@ -65,9 +65,28 @@ struct Bubble<Content: View>: View {
 
     var body: some View {
         let tint = gem == .obsidian ? Color.white : gem.color
-        content
-            .frame(width: diameter, height: diameter)
-            .background(Circle().fill(.black))
-            .overlay(Circle().strokeBorder(tint.opacity(gem == .obsidian ? 0.1 : 0.28), lineWidth: 1))
+        if Theme.isGlass {
+            // A glass bead: dark enough to read over a light menu bar, lit along its top edge.
+            content
+                .frame(width: diameter, height: diameter)
+                .background {
+                    ZStack {
+                        Circle().fill(.black.opacity(0.78))
+                        Circle().fill(RadialGradient(colors: [tint.opacity(gem == .obsidian ? 0.08 : 0.26), .clear],
+                                                     center: .bottom, startRadius: 0, endRadius: diameter * 0.75))
+                        Ellipse().fill(LinearGradient(colors: [.white.opacity(0.22), .white.opacity(0)],
+                                                      startPoint: .top, endPoint: .bottom))
+                            .frame(width: diameter * 0.7, height: diameter * 0.42)
+                            .offset(y: -diameter * 0.22)
+                    }
+                }
+                .overlay(Circle().strokeBorder(tint.opacity(gem == .obsidian ? 0.12 : 0.4), lineWidth: 1))
+                .glassEdge(Circle(), strength: 0.8)
+        } else {
+            content
+                .frame(width: diameter, height: diameter)
+                .background(Circle().fill(.black))
+                .overlay(Circle().strokeBorder(tint.opacity(gem == .obsidian ? 0.1 : 0.28), lineWidth: 1))
+        }
     }
 }

@@ -40,6 +40,16 @@ private struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("Look") {
+                Picker("Design", selection: Binding(get: { prefs.design }, set: { prefs.design = $0 })) {
+                    ForEach(Design.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                Text("Crystal is a black island lit at its rim. Liquid Glass is smoked glass over a blur of your desktop, with slow liquid color.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("What the island shows") {
                 Picker("Idle sessions", selection: Binding(get: { prefs.idleMode }, set: { prefs.idleMode = $0 })) {
                     ForEach(IdleMode.allCases) { Text($0.title).tag($0) }

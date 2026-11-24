@@ -59,7 +59,7 @@ struct StatusGlyph: View {
     }
 }
 
-/// Capsule button: flat fill, 38 pt.
+/// Capsule button: flat fill (liquid glass in that design), 38 pt.
 struct CapsuleButton: View {
     let title: String
     let background: Color
@@ -72,7 +72,13 @@ struct CapsuleButton: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(foreground)
                 .frame(maxWidth: .infinity, minHeight: 38)
-                .background(Capsule().fill(background))
+                .background {
+                    if Theme.isGlass {
+                        GlassCapsuleFill(background: background)
+                    } else {
+                        Capsule().fill(background)
+                    }
+                }
                 .contentShape(Capsule())
         }
         .buttonStyle(.plain)

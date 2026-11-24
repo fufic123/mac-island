@@ -120,6 +120,7 @@ struct SessionsPanel: View {
         .padding(.horizontal, 12)
         .frame(height: 48)
         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(hovered ? Crystal.rowHover : .clear))
+        .glassEdge(RoundedRectangle(cornerRadius: 14, style: .continuous), strength: 0.6, visible: hovered)
         .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(Crystal.expand) { model.showsIdle.toggle() }

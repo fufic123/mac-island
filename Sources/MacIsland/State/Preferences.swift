@@ -27,6 +27,19 @@ enum FinishedGlow: String, CaseIterable, Identifiable {
     }
 }
 
+/// The island's look. Crystal: an obsidian island lit only at its rim. Liquid Glass: a smoked
+/// glass body over a blur of the desktop, with a specular edge and slow liquid color.
+enum Design: String, CaseIterable, Identifiable {
+    case crystal, liquidGlass
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .crystal: "Crystal"
+        case .liquidGlass: "Liquid Glass"
+        }
+    }
+}
+
 /// User settings, kept in UserDefaults. Observable so the island redraws when they change.
 @MainActor
 @Observable
@@ -43,6 +56,13 @@ final class Preferences {
     /// The subscription's 5-hour and weekly usage limits under the session list.
     var showLimits: Bool {
         didSet { defaults.set(showLimits, forKey: "showLimits") }
+    }
+
+    var design: Design {
+        didSet {
+            defaults.set(design.rawValue, forKey: "design")
+            Theme.design = design
+        }
     }
 
     var idleMode: IdleMode {
@@ -62,6 +82,9 @@ final class Preferences {
     private init() {
         showCost = defaults.object(forKey: "showCost") as? Bool ?? false
         showLimits = defaults.object(forKey: "showLimits") as? Bool ?? true
+        let design = defaults.string(forKey: "design").flatMap(Design.init) ?? .crystal
+        self.design = design
+        Theme.design = design
         idleMode = defaults.string(forKey: "idleMode").flatMap(IdleMode.init) ?? .collapse
         finishedGlow = defaults.string(forKey: "finishedGlow").flatMap(FinishedGlow.init) ?? .untilOpened
         discoverSessions = defaults.object(forKey: "discoverSessions") as? Bool ?? true

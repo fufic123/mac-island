@@ -27,7 +27,13 @@ struct UpdateBanner: View {
                     .foregroundStyle(model.isUpdating ? Crystal.tertiary : Color(hex: 0x00140B))
                     .padding(.horizontal, 14)
                     .frame(minHeight: 32)
-                    .background(Capsule().fill(model.isUpdating ? Crystal.button : Crystal.emerald))
+                    .background {
+                        if Theme.isGlass {
+                            GlassCapsuleFill(background: model.isUpdating ? Crystal.button : Crystal.emerald)
+                        } else {
+                            Capsule().fill(model.isUpdating ? Crystal.button : Crystal.emerald)
+                        }
+                    }
                     .contentShape(Capsule())
             }
             .buttonStyle(.plain)
