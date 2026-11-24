@@ -58,6 +58,12 @@ final class Preferences {
         didSet { defaults.set(showLimits, forKey: "showLimits") }
     }
 
+    /// Asks Anthropic for the limits every minute with Claude Code's sign-in, instead of waiting
+    /// for Claude Code's status line to report them.
+    var limitsFromAccount: Bool {
+        didSet { defaults.set(limitsFromAccount, forKey: "limitsFromAccount") }
+    }
+
     var design: Design {
         didSet {
             defaults.set(design.rawValue, forKey: "design")
@@ -82,6 +88,7 @@ final class Preferences {
     private init() {
         showCost = defaults.object(forKey: "showCost") as? Bool ?? false
         showLimits = defaults.object(forKey: "showLimits") as? Bool ?? true
+        limitsFromAccount = defaults.object(forKey: "limitsFromAccount") as? Bool ?? true
         let design = defaults.string(forKey: "design").flatMap(Design.init) ?? .crystal
         self.design = design
         Theme.design = design

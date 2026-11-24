@@ -32,6 +32,11 @@ func run() {
         let later = limits?.current(at: Date(timeIntervalSince1970: 3000))
         check(later?.fiveHour?.usedPercent == 0 && later?.sevenDay?.usedPercent == 100, "a limit past its reset time starts over at 0%")
         check(UsageLimits.decode(Data(#"{"updated_at":1,"rate_limits":{}}"#.utf8)) == nil, "no windows means no limits")
+        let api = UsageLimits.decodeUsageResponse(Data(#"{"five_hour":{"utilization":81,"resets_at":"2026-11-09T13:20:00.983799+00:00"},"seven_day":{"utilization":22,"resets_at":"2026-11-13T13:00:00+00:00"},"seven_day_opus":null}"#.utf8), receivedAt: Date(timeIntervalSince1970: 5))
+        let resets = api?.fiveHour?.resetsAt.timeIntervalSince1970 ?? 0
+        check(api?.fiveHour?.usedPercent == 81 && api?.sevenDay?.usedPercent == 22 && abs(resets - 1794230400.98) < 0.01,
+              "Anthropic's usage answer is read, fractional reset times included")
+        check(UsageLimits.newest(limits, api)?.updatedAt == Date(timeIntervalSince1970: 1000), "the later of two reports wins")
     }
     do {
         // A subagent launched before the app saw its Task call is found by its metadata.

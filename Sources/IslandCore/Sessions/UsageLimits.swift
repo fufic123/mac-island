@@ -43,6 +43,35 @@ public struct UsageLimits: Equatable, Sendable {
         return result.fiveHour == nil && result.sevenDay == nil ? nil : result
     }
 
+    /// Anthropic's usage answer (what Claude Code's /usage shows): `utilization` in percent and
+    /// `resets_at` as an ISO 8601 date, per window.
+    public static func decodeUsageResponse(_ data: Data, receivedAt now: Date) -> UsageLimits? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        func window(_ key: String) -> Window? {
+            guard let raw = root[key] as? [String: Any],
+                  let used = (raw["utilization"] as? NSNumber)?.doubleValue,
+                  let resetsText = raw["resets_at"] as? String,
+                  let resets = parseDate(resetsText) else { return nil }
+            return Window(usedPercent: min(max(used, 0), 100), resetsAt: resets)
+        }
+        let result = UsageLimits(fiveHour: window("five_hour"), sevenDay: window("seven_day"), updatedAt: now)
+        return result.fiveHour == nil && result.sevenDay == nil ? nil : result
+    }
+
+    private static func parseDate(_ text: String) -> Date? {
+        let precise = ISO8601DateFormatter()
+        precise.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = precise.date(from: text) { return date }
+        return ISO8601DateFormatter().date(from: text)
+    }
+
+    /// Of two reports, the one written last.
+    public static func newest(_ a: UsageLimits?, _ b: UsageLimits?) -> UsageLimits? {
+        guard let a else { return b }
+        guard let b else { return a }
+        return a.updatedAt >= b.updatedAt ? a : b
+    }
+
     public static func load(from url: URL = file) -> UsageLimits? {
         (try? Data(contentsOf: url)).flatMap(decode)
     }

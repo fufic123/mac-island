@@ -8,6 +8,7 @@ final class IslandController {
     private let store = SessionStore()
     let model: IslandModel
     private var pruneTimer: Timer?
+    private let usageFetcher = PlanUsageFetcher()
     private var interruptTimer: Timer?
     /// Set after an action closed the island under the cursor; cleared when the cursor leaves.
     private var holdClosedUntilExit = false
@@ -94,7 +95,14 @@ final class IslandController {
     private static let sessionsFile = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         .appendingPathComponent("MacIsland/sessions.json")
 
+    /// The newer of the two reports: Claude Code's status line, and Anthropic asked directly.
+    private func refreshLimits() {
+        let limits = UsageLimits.newest(UsageLimits.load(), usageFetcher.latest)
+        if limits != model.limits { model.limits = limits }
+    }
+
     private func startHookServer() {
+        usageFetcher.start { [weak self] in self?.refreshLimits() }
         let store = store
         store.restore(from: Self.sessionsFile)
         let server = HookServer { envelope, reply in
@@ -116,8 +124,7 @@ final class IslandController {
                 store.discoverSubagents()
                 if Preferences.shared.discoverSessions { store.discoverSessions() }
                 store.save(to: Self.sessionsFile)
-                let limits = UsageLimits.load()
-                if limits != model.limits { model.limits = limits }
+                self?.refreshLimits()
                 self?.noticeFirstSession()
                 // The island can grow or shrink under a cursor that isn't moving.
                 self?.updateHover()

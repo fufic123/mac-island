@@ -68,7 +68,14 @@ private struct SettingsView: View {
                     .foregroundStyle(.secondary)
 
                 Toggle("Show plan limits", isOn: Binding(get: { prefs.showLimits }, set: { prefs.showLimits = $0 }))
-                Text("How much of your Claude plan's 5-hour and weekly limits is used, as Claude Code last reported it. Read on this Mac from Claude Code's status line; nothing is fetched.")
+                Text("How much of your Claude plan's 5-hour and weekly limits is used, and when each resets.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Toggle("Check limits with my Claude account",
+                       isOn: Binding(get: { prefs.limitsFromAccount }, set: { prefs.limitsFromAccount = $0 }))
+                    .disabled(!prefs.showLimits)
+                Text("Asks Anthropic every minute with Claude Code's sign-in from your keychain, like /usage does; macOS asks once to allow it. Off: the numbers come only from Claude Code's status line, while you use claude in a terminal.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 

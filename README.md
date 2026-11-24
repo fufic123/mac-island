@@ -174,7 +174,7 @@ Also:
 - **Subagents.** Running subagents are listed under their session, including ones started before the island was.
 - **Esc and API errors.** A turn stopped with Esc, or by an API error, shows as stopped instead of running forever.
 - **Survives restarts.** Sessions, and a reply you can still send, carry over when the island restarts or updates.
-- **Plan limits.** How much of your Claude plan's 5-hour and weekly limits is used and when each resets, under the session list. Read from Claude Code's status line on this Mac; a status line you already had keeps working.
+- **Plan limits.** How much of your Claude plan's 5-hour and weekly limits is used and when each resets, under the session list. Asked from Anthropic every minute with Claude Code's own sign-in (like `/usage`; macOS asks once to let the island read it), and also taken from Claude Code's status line; a status line you already had keeps working.
 - **Cost.** What each conversation and all of today's cost at API prices.
 - **Stays out of the way.** Only the island itself takes clicks; the rest of the screen under its window works as usual. One copy runs at a time.
 
