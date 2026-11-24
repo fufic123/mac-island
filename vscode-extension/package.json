@@ -1,0 +1,11 @@
+{
+  "name": "mac-island-terminals",
+  "displayName": "Mac Island Terminals",
+  "description": "Lets Mac Island open the exact terminal a Claude Code session runs in.",
+  "version": "1.0.0",
+  "publisher": "macisland",
+  "engines": { "vscode": "^1.60.0" },
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "license": "MIT"
+}

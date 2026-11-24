@@ -14,6 +14,13 @@ cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # The app connects itself to Claude Code on first launch with these.
 cp scripts/island-hook.sh scripts/island-statusline.sh scripts/install-hooks.sh "$APP/Contents/Resources/"
 chmod +x "$APP/Contents/Resources/"*.sh
+# The VS Code helper that picks the right integrated terminal, packed as a .vsix (a zip).
+VSIX_DIR=$(mktemp -d)
+mkdir -p "$VSIX_DIR/extension"
+cp vscode-extension/package.json vscode-extension/extension.js "$VSIX_DIR/extension/"
+cp vscode-extension/extension.vsixmanifest "vscode-extension/[Content_Types].xml" "$VSIX_DIR/"
+(cd "$VSIX_DIR" && zip -qrX "$OLDPWD/$APP/Contents/Resources/mac-island-terminals.vsix" .)
+rm -rf "$VSIX_DIR"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>

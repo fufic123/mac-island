@@ -119,7 +119,9 @@ enum TerminalFocuser {
     /// Fallback for any terminal/IDE: walk up from Claude's pid to the GUI app hosting it.
     private static func activateOwningApp(of session: AgentSession) {
         guard var pid = session.pid else { return }
+        var chain: [pid_t] = []
         for _ in 0..<20 {
+            chain.append(pid)
             if let app = NSRunningApplication(processIdentifier: pid),
                app.activationPolicy == .regular,
                let url = app.bundleURL {
@@ -129,8 +131,16 @@ enum TerminalFocuser {
                 // VS Code and its forks (Cursor, Windsurf) all report TERM_PROGRAM=vscode; opening the
                 // project folder with the app raises the window that has it open instead of
                 // whichever window happens to be frontmost.
-                if session.termProgram == "vscode", let cwd = session.cwd {
-                    NSWorkspace.shared.open([URL(fileURLWithPath: cwd)], withApplicationAt: url, configuration: config)
+                // The bundled extension picks the exact integrated terminal when it can.
+                if session.termProgram == "vscode" {
+                    let cwd = session.cwd
+                    VSCodeTerminals.focus(pids: chain, app: url, bundleId: app.bundleIdentifier) {
+                        if let cwd {
+                            NSWorkspace.shared.open([URL(fileURLWithPath: cwd)], withApplicationAt: url, configuration: config)
+                        } else {
+                            NSWorkspace.shared.openApplication(at: url, configuration: config)
+                        }
+                    }
                 } else {
                     NSWorkspace.shared.openApplication(at: url, configuration: config)
                 }
