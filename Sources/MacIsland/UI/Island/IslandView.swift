@@ -134,10 +134,10 @@ struct IslandView: View {
                     .transition(.opacity)
             }
             if Theme.isGlass {
-                if model.mode != .compact {
-                    GlassRim(gem: model.stateGem, radius: radius, animates: model.mode == .panel)
-                        .opacity(model.mode == .panel ? 1 : 0)
-                }
+                // Always there, like Crystal's border: removed on close, it lingered at the panel's
+                // size while it faded out.
+                GlassRim(gem: model.stateGem, radius: radius, animates: model.mode == .panel)
+                    .opacity(model.mode == .panel ? 1 : 0)
             } else {
                 LitBorder(gem: model.stateGem, radius: radius)
                     .opacity(model.mode == .panel ? 1 : 0)
